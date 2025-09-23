@@ -250,28 +250,29 @@
   }
 
   // カウントダウン演出（1.5秒：Ready→GO）
-  function showCountdown(startedAt){
-    overlay.classList.add('show');
-    overlay.textContent = 'Ready';
-    const mid = startedAt + CONFIG.countdownMs * 0.6; // 0.9sでGOへ
-    const end = startedAt + CONFIG.countdownMs;       // 1.5sで開始
+ function showCountdown(startedAt){
+  overlay.classList.add('show');
+  overlay.textContent = 'Ready';
+  tapBtn.disabled = true;              // ★ カウントダウン中はTAP無効
 
-    function tick(){
-      const now = performance.now();
-      if(now >= end){
-        overlay.classList.remove('show');
-        phase = 'play';
-        // GO時点の角度を取得して、そこから先に最初のゾーンを配置
-        const goAngle = angleAt(now);
-        placeInitialZone(goAngle);
-        tapBtn.disabled = false;
-        return;
-      }
-      if(now >= mid) overlay.textContent = 'GO!';
-      requestAnimationFrame(tick);
+  const mid = startedAt + CONFIG.countdownMs * 0.6; // 0.9秒でGOへ
+  const end = startedAt + CONFIG.countdownMs;       // 1.5秒で開始
+
+  function tick(){
+    const now = performance.now();
+    if(now >= end){
+      overlay.classList.remove('show');
+      phase = 'play';
+      const goAngle = angleAt(now);
+      placeInitialZone(goAngle);
+      tapBtn.disabled = false;         // ★ GOの瞬間にTAP有効化
+      return;
     }
+    if(now >= mid) overlay.textContent = 'GO!';
     requestAnimationFrame(tick);
   }
+  requestAnimationFrame(tick);
+}
 
   // 制御
   function startGame(){
