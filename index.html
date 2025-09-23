@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>DBDスキルチェック：怒涛の嵐（赤針＋白ゾーン）</title>
+<title>DBDスキルチェック：怒涛の嵐（固定速度・赤針＋白ゾーン）</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#ffffff; --danger:#ef4444; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
@@ -21,7 +21,6 @@
     background:#111827;border:1px solid #243042;border-radius:999px;padding:6px 12px;font-weight:800
   }
 
-  /* 円の下に置く大きめのTAPボタン（長方形） */
   .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;
@@ -30,7 +29,6 @@
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4)}
 
-  /* 下部コントロール（ミュート/一時停止/ランキング） */
   .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:0;padding-bottom:4px}
   .ctrls{display:flex;gap:8px;margin:0 auto}
   .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:4px}
@@ -45,23 +43,19 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- 上部はスタートだけ -->
     <div class="topbar">
       <button id="startBtn" class="btn primary">▶ スタート</button>
     </div>
 
-    <!-- 盤面 -->
     <div class="board">
       <div class="streak-badge">連続成功: <span id="streak">0</span></div>
       <canvas id="cv"></canvas>
     </div>
 
-    <!-- 円の下にTAPボタン -->
     <div class="tap-row">
       <button id="tapBtn" aria-label="Tap to check" disabled>TAP</button>
     </div>
 
-    <!-- 下部コントロール -->
     <div class="bottombar">
       <div class="ctrls">
         <button id="muteBtn" class="btn">🔈 ミュート</button>
@@ -73,7 +67,6 @@
     <div class="hint">※ 成功時に <code>success.mp3</code> を再生（初回操作で解放）。</div>
   </div>
 
-  <!-- ランキング（名前なし：日付＋連続回数） -->
   <dialog id="rankDlg">
     <div class="dlg-head">🏆 オフライン TOP5</div>
     <div class="dlg-body">
@@ -90,16 +83,15 @@
 
 <script>
 (() => {
-  // ===== 調整パラメータ =====
+  // ===== 固定設定（本家寄せ） =====
   const CONFIG = {
-    zoneArcRatio: 0.18,          // 白ゾーン（Good相当）の幅（円周比）
-    baseRPM: 60,                 // スイープ初速（RPM）
-    rpmIncrease: 6,              // 成功ごと加速
-    maxRPM: 180,
-    markerArcRatio: 0.02,        // スイープの白い通過マーカー幅（見やすさ用）
+    zoneArcRatio: 0.16,          // ★白ゾーン幅は常に0.16に固定
+    baseRPM: 60,                 // ★常に一定速度（RPM）
+    rpmIncrease: 0,              // ★成功しても速度は一切上げない
+    markerArcRatio: 0.02,        // スイープ可視用の幅
     inputCooldownMs: 45,         // 低レイテンシ・誤爆防止
-    nextZoneMinDeg: 180,         // 次ゾーン最小オフセット（度）
-    nextZoneMaxDeg: 220          // 次ゾーン最大オフセット（度）
+    nextZoneMinDeg: 180,         // 成功後の次ゾーン中心オフセット範囲（度）
+    nextZoneMaxDeg: 220
   };
 
   // ===== 要素 =====
@@ -121,16 +113,18 @@
   let lastInputAt=0;
 
   const FULL = Math.PI*2;
-  let rpm = CONFIG.baseRPM;
+  const zoneSize = FULL * CONFIG.zoneArcRatio;
+  const markerSize = FULL * CONFIG.markerArcRatio;
+
+  // 速度は不変
+  const rpm = CONFIG.baseRPM;
 
   // スイープ角は baseAngle @ baseTime から算出
   let baseAngle=0; // rad
   let baseTime=0;  // performance.now()
 
-  // 白ゾーン（固定表示）の開始角
+  // 白ゾーンの開始角
   let zoneStart=0;
-  const zoneSize = FULL * CONFIG.zoneArcRatio;
-  const markerSize = FULL * CONFIG.markerArcRatio;
 
   // 連続回数
   let streak=0;
@@ -197,12 +191,12 @@
 
     // 赤い固定針（常に12時方向）
     ctx.save(); ctx.translate(CX, CY);
-    ctx.rotate(-Math.PI/2); // 12時に向ける
+    ctx.rotate(-Math.PI/2); // 12時へ
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -rInner);
     ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
     ctx.restore();
 
-    // ラベル（控えめ）
+    // ラベル
     ctx.fillStyle = '#9aa4af';
     ctx.font = '700 22px system-ui, -apple-system, Segoe UI';
     ctx.textAlign = 'center';
@@ -216,23 +210,24 @@
     requestAnimationFrame(loop);
   }
 
-  // ゾーン再配置（成功後：180〜220度先に新規生成）
+  // 成功後のゾーン移動：直前成功角 + [180°,220°] に次ゾーン中心を置く
   function moveZoneAfterSuccess(successAngle){
     const min = CONFIG.nextZoneMinDeg * Math.PI / 180;
     const max = CONFIG.nextZoneMaxDeg * Math.PI / 180;
     const offset = min + Math.random()*(max - min);
-    zoneStart = norm(successAngle + offset - zoneSize/2); // ゾーンは中心をoffset先にして開始角を計算
+    // ゾーンは「中心= successAngle+offset」。開始角は中心 - zoneSize/2
+    zoneStart = norm(successAngle + offset - zoneSize/2);
   }
 
-  // ランダム初期配置（開始時）
+  // 開始時のランダム初期配置
   function randomizeZoneInitial(){
     zoneStart = Math.random()*FULL;
   }
 
-  // 入力（押した瞬間の角度で即時判定）
+  // 入力：押した瞬間の角度で即判定（低レイテンシ）
   function onTap(ev){
     if(!running || paused) return;
-    const now = performance.now(); // 各ブラウザ互換のため簡潔に
+    const now = performance.now();
     if(now - lastInputAt < CONFIG.inputCooldownMs) return;
     lastInputAt = now;
 
@@ -240,11 +235,11 @@
     const ok = inRange(a, zoneStart, norm(zoneStart + zoneSize));
 
     if(ok){
-      // 見た目と内部を一致させる：ここを基準に
+      // 見た目と内部を一致
       baseAngle = a; baseTime = now;
-      if(!muted){ try{ successAudio.currentTime = 0; successAudio.play().catch(()=>{});}catch{} }
+      if(!muted){ try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{} }
       streak++; elStreak.textContent = String(streak);
-      rpm = Math.min(CONFIG.maxRPM, rpm + CONFIG.rpmIncrease);
+      // 速度は固定のまま（変更しない）
       moveZoneAfterSuccess(a);
       draw(now);
     }else{
@@ -256,7 +251,7 @@
   function startGame(){
     resizeCanvas();
     running=true; paused=false; streak=0; elStreak.textContent='0';
-    rpm = CONFIG.baseRPM; baseAngle=0; baseTime=performance.now();
+    baseAngle=0; baseTime=performance.now();
     randomizeZoneInitial();
     tapBtn.disabled=false;
     requestAnimationFrame(loop);
@@ -265,7 +260,7 @@
     if(!running) return;
     paused = !paused;
     pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
-    // 再開ズレ防止
+    // 再開直後のズレ防止
     const now = performance.now();
     baseAngle = sweepAngleAt(now);
     baseTime  = now;
@@ -279,8 +274,8 @@
     renderRanking();
   }
 
-  // ランキング（名前なし）
-  const KEY='skillcheck_top5_redneedle_whitezone_v1';
+  // ランキング（名前なし：日付＋連続回数）
+  const KEY='skillcheck_top5_fixedspeed_v1';
   function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
   function saveScore(entry){
     if(entry.score<=0) return;
@@ -308,7 +303,6 @@
   closeRank.addEventListener('click', ()=>rankDlg.close(), {passive:true});
   resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); }, {passive:true});
 
-  // 入力
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
