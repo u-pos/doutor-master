@@ -3,15 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>DBDスキルチェック：怒涛の嵐 連続チャレンジ</title>
+<title>DBDスキルチェック：怒涛の嵐（スイープ型・低レイテンシ）</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#4ade80; --warn:#f59e0b; --danger:#ef4444; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
   .topbar{width:100%;max-width:720px;display:flex;justify-content:center;align-items:center}
-  .title{display:none}
-  .btn{border:1px solid #26303a;background:#161a21;color:var(--fg);border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
-  .btn:active{transform:translateY(1px)}
+  .btn{border:1px solid #26303a;background:#161a21;color:var(--fg);border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer;touch-action:manipulation}
   .btn.primary{background:#1f2937;border-color:#334155}
   .btn.accent{background:#12331c;border-color:#1f6d39;color:#bbf7d0}
   .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
@@ -19,34 +17,26 @@
 
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
-
-  /* 中央TAPボタン */
-  .tap-btn{
-    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:min(46%,220px);height:min(46%,220px);border-radius:9999px;
-    display:flex;align-items:center;justify-content:center;
-    border:3px solid #334155;background:#0f131a;color:#e5e7eb;font-weight:900;
-    font-size:clamp(18px,6vw,28px);letter-spacing:1px;
-    box-shadow:0 6px 18px rgba(0,0,0,.4); user-select:none; -webkit-tap-highlight-color:transparent;
-  }
-  .tap-btn:active{transform:translate(-50%,-50%) scale(0.98)}
-  .tap-btn[disabled]{opacity:.45;filter:saturate(.4)}
   .streak-badge{
     position:absolute;left:50%;top:10px;transform:translateX(-50%);
     background:#111827;border:1px solid #243042;border-radius:999px;padding:6px 12px;font-weight:800
   }
 
-  /* 画面下部のコントロールバー */
-  .bottombar{
-    margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:space-between;gap:8px;
-    position:sticky;bottom:0;background:transparent;padding-bottom:4px
+  /* 円の下に置く大きめのTAPボタン（長方形） */
+  .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
+  #tapBtn{
+    width:min(92%,560px);height:68px;border-radius:16px;border:2px solid #334155;
+    background:#0f131a;color:#e5e7eb;font-weight:900;font-size:clamp(18px,5vw,28px);
+    letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35); user-select:none; -webkit-tap-highlight-color:transparent;
   }
+  #tapBtn[disabled]{opacity:.45;filter:saturate(.4)}
+
+  /* 画面下部のコントロールバー（ミュート/一時停止/ランキング） */
+  .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:0;padding-bottom:4px}
   .ctrls{display:flex;gap:8px;margin:0 auto}
   .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:4px}
 
-  dialog{
-    border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:var(--fg)
-  }
+  dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:var(--fg)}
   .dlg-head{padding:14px 16px;border-bottom:1px solid #253040;font-weight:700}
   .dlg-body{padding:12px 16px}
   .rank-list{width:100%;border-collapse:collapse}
@@ -63,7 +53,10 @@
     <div class="board">
       <div class="streak-badge">連続成功: <span id="streak">0</span></div>
       <canvas id="cv"></canvas>
-      <button id="tapBtn" class="tap-btn" aria-label="Tap to check" disabled>TAP</button>
+    </div>
+
+    <div class="tap-row">
+      <button id="tapBtn" aria-label="Tap to check" disabled>TAP</button>
     </div>
 
     <div class="bottombar">
@@ -74,7 +67,7 @@
       </div>
     </div>
 
-    <div class="hint">※ 成功時に <code>success.mp3</code> を再生（初回タップで解放）。</div>
+    <div class="hint">※ 成功時に <code>success.mp3</code> を再生（初回操作で解放）。</div>
   </div>
 
   <dialog id="rankDlg">
@@ -93,25 +86,25 @@
 
 <script>
 (() => {
-  // ===== パラメータ（DBD風） =====
+  // ===== 調整パラメータ（DBD風） =====
   const CONFIG = {
     goodArcRatio: 0.18,   // Good幅（円周比）
-    greatArcRatio: 0.04,  // Great幅（Good内）
-    baseRPM: 60,
-    rpmIncrease: 6,
+    greatArcRatio: 0.04,  // Great幅（Good内センター）
+    baseRPM: 60,          // スイープの初期回転速度（RPM）
+    rpmIncrease: 6,       // 成功ごとに加速
     maxRPM: 180,
-    pointerWidth: 6,
-    inputCooldownMs: 250
+    sweepWidthRatio: 0.02,// 白いスイープマーカーの幅（円周比）※見やすさ
+    inputCooldownMs: 45   // 低レイテンシ・誤爆防止
   };
 
   // ===== 要素 =====
   const cv = document.getElementById('cv');
-  const ctx = cv.getContext('2d');
-  const tapBtn  = document.getElementById('tapBtn');
+  const ctx = cv.getContext('2d', { alpha: false, desynchronized: true });
   const startBtn= document.getElementById('startBtn');
   const pauseBtn= document.getElementById('pauseBtn');
   const muteBtn = document.getElementById('muteBtn');
   const rankBtn = document.getElementById('rankBtn');
+  const tapBtn  = document.getElementById('tapBtn');
   const rankDlg = document.getElementById('rankDlg');
   const rankTbd = document.querySelector('#rankTable tbody');
   const closeRank = document.getElementById('closeRank');
@@ -120,26 +113,31 @@
 
   // ===== 状態 =====
   let running=false, paused=false, muted=false;
-  let lastInputAt=0, lastTs=0;
-  let angle=0; // rad
+  let lastInputAt=0;
+
+  // スイープは「針は固定(12時)」で「スイープ角が時間で回る」。
   let rpm = CONFIG.baseRPM;
-  let zoneStart=0;
-  const zoneSize = Math.PI*2*CONFIG.goodArcRatio;
-  const greatSize= Math.PI*2*CONFIG.greatArcRatio;
+  let baseAngle=0;   // now=baseTime時点のスイープ角（rad）
+  let baseTime=0;    // performance.now()
+  let zoneStart=0;   // Good開始角
+  const full = Math.PI*2;
+  const zoneSize  = full * CONFIG.goodArcRatio;
+  const greatSize = full * CONFIG.greatArcRatio;
+  const sweepSize = full * CONFIG.sweepWidthRatio; // 表示用白マーカーの幅
   let streak=0;
 
-  // DPR対応（必ずスタート直前にも1回実行）
-  let cssW=0, cssH=0;
+  // DPR対応
+  let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
     const rect = cv.getBoundingClientRect();
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
     cssW = rect.width; cssH = rect.height;
     cv.width  = Math.round(cssW * dpr);
     cv.height = Math.round(cssH * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw();
+    draw(performance.now());
   }
-  new ResizeObserver(()=>resizeCanvas()).observe(cv);
+  new ResizeObserver(resizeCanvas).observe(cv);
 
   // オーディオ
   const successAudio = new Audio('success.mp3');
@@ -150,129 +148,137 @@
   }
   window.addEventListener('pointerdown', unlockAudio, {once:true});
 
+  // 角度算出（任意時刻t）
+  function sweepAngleAt(t){
+    const rps = rpm / 60;
+    const delta = (t - baseTime)/1000;
+    const a = baseAngle + rps * full * delta;
+    return norm(a);
+  }
+  function norm(a){ return (a % full + full) % full; }
+  function inRange(a,s,e){ return (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e); }
+
   // 描画
-  function draw(){
+  function draw(now){
     const w = cssW, h = cssH;
     const CX = w/2, CY = h/2;
     const rOuter = Math.min(w,h)*0.42;
     const rInner = rOuter - 36;
 
+    const sweepCenter = sweepAngleAt(now);
+
     ctx.clearRect(0,0,w,h);
 
     // 背景円
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter+24, 0, Math.PI*2);
+    ctx.beginPath(); ctx.arc(CX, CY, rOuter+24, 0, full);
     ctx.fillStyle = '#0a0d12'; ctx.fill();
 
-    // リング
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, Math.PI*2);
+    // ベースリング
+    ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, full);
     ctx.lineWidth = 24; ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
-    // Goodゾーン
-    ctx.beginPath();
-    ctx.strokeStyle = '#10b981'; ctx.lineWidth = 24;
+    // Goodゾーン（緑）
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#10b981';
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
 
-    // Greatゾーン
+    // Greatゾーン（黄）Goodの中央
     const greatStart = zoneStart + (zoneSize - greatSize)/2;
-    ctx.beginPath();
-    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 24;
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#fbbf24';
     ctx.arc(CX, CY, rOuter, greatStart, greatStart+greatSize); ctx.stroke();
 
-    // 目盛り
-    ctx.save(); ctx.translate(CX, CY);
-    const ticks = 32;
-    for(let i=0;i<ticks;i++){
-      const a = i*(Math.PI*2/ticks);
-      const x1 = Math.cos(a)*(rInner-10), y1 = Math.sin(a)*(rInner-10);
-      const x2 = Math.cos(a)*(rInner-2),  y2 = Math.sin(a)*(rInner-2);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
-      ctx.strokeStyle = '#263146'; ctx.lineWidth = 2; ctx.stroke();
-    }
-    ctx.restore();
+    // スイープ（白マーカー）— 回ってくるやつ
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#e5e7eb';
+    ctx.shadowColor = '#93c5fd'; ctx.shadowBlur = 8;
+    ctx.arc(CX, CY, rOuter, sweepCenter - sweepSize/2, sweepCenter + sweepSize/2); ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    // ポインタ
-    ctx.save(); ctx.translate(CX, CY); ctx.rotate(angle);
+    // 固定針（12時方向）
+    ctx.save(); ctx.translate(CX, CY); ctx.rotate(0); // 12時 = 角度0基準を上に
+    // 12時方向に向くよう補正：キャンバスは通常0radが右なので、-90度回転してから描く
+    ctx.rotate(-Math.PI/2);
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -rInner);
-    ctx.lineWidth = CONFIG.pointerWidth; ctx.strokeStyle = '#e5e7eb';
-    ctx.shadowColor = '#93c5fd'; ctx.shadowBlur = 8; ctx.stroke();
+    ctx.lineWidth = 6; ctx.strokeStyle = '#e5e7eb'; ctx.stroke();
     ctx.restore();
 
-    // 中央ラベル（控えめ）
+    // ラベル
     ctx.fillStyle = '#9aa4af';
     ctx.font = '700 22px system-ui, -apple-system, Segoe UI';
     ctx.textAlign = 'center';
     ctx.fillText(`怒涛の嵐 連続 ${streak}`, CX, CY+10);
   }
 
-  // ゾーン
-  function randomizeZone(){
-    const full = Math.PI*2;
-    const pad = 0.15;
-    zoneStart = (Math.random()*full + (Math.random()*pad - pad/2)) % full;
-  }
-
   // ループ
-  function loop(ts){
+  function loop(now){
     if(!running){ return; }
-    if(paused){ requestAnimationFrame(loop); return; }
-    if(!lastTs) lastTs = ts;
-    const dt = (ts - lastTs)/1000; lastTs = ts;
-    const rps = rpm / 60;
-    angle = (angle + rps * Math.PI*2 * dt) % (Math.PI*2);
-    draw();
+    if(!paused){ draw(now); }
     requestAnimationFrame(loop);
   }
 
-  // 入力
-  function tryCheck(){
+  // ゾーン再配置
+  function randomizeZone(){
+    // 12時直近ばかり来ないよう少しバラす
+    const pad = 0.15;
+    zoneStart = norm(Math.random()*full + (Math.random()*pad - pad/2));
+  }
+
+  // 入力（TAPした瞬間の時刻で判定）
+  function onTap(ev){
     if(!running || paused) return;
-    const now = performance.now();
+    const now = ev?.timeStamp ? performance.now() : performance.now(); // 実装相性のため簡略（modern環境ならev.timeStampでもOK）
     if(now - lastInputAt < CONFIG.inputCooldownMs) return;
     lastInputAt = now;
 
-    const a = norm(angle);
-    const s = norm(zoneStart);
+    const a = sweepAngleAt(now);
+    // 成功判定は「固定針が12時＝0radにいるとき、スイープ中心がGood範囲内か」で見る
+    // Good/Greetはリング上の角度で定義済み
+    const s = zoneStart;
     const e = norm(zoneStart + zoneSize);
     const ok = inRange(a, s, e);
 
     if(ok){
+      // 見た目と内部を一致させる：ここを基準に取り直し
+      baseAngle = a; baseTime = now;
       playSuccess();
       streak++; elStreak.textContent = String(streak);
       rpm = Math.min(CONFIG.maxRPM, rpm + CONFIG.rpmIncrease);
       randomizeZone();
+      draw(now);
     }else{
       gameOver();
     }
   }
-  function norm(a){ const t=Math.PI*2; return (a%t + t) % t; }
-  function inRange(a,s,e){ return (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e); }
-  function playSuccess(){ if(muted) return; try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch(_){} }
+
+  // サウンド
+  const playSuccess = () => { if(muted) return; try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch(_){} };
 
   // 制御
   function startGame(){
-    // 強制リサイズ → 状態初期化 → ループ開始（開始できない問題対策）
     resizeCanvas();
-    running=true; paused=false; lastTs=0; angle=0; rpm=CONFIG.baseRPM; streak=0;
-    elStreak.textContent='0';
+    running=true; paused=false; streak=0; elStreak.textContent='0';
+    rpm = CONFIG.baseRPM; baseAngle=0; baseTime=performance.now();
     randomizeZone();
-    tapBtn.disabled=false; // TAP解放
+    tapBtn.disabled=false;
     requestAnimationFrame(loop);
   }
   function pauseGame(){
     if(!running) return;
     paused = !paused;
     pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
+    // 再開直後ズレ防止
+    const now = performance.now();
+    baseAngle = sweepAngleAt(now);
+    baseTime = now;
+    draw(now);
   }
-  function stopGame(){ running=false; paused=false; lastTs=0; tapBtn.disabled=true; }
-
+  function stopGame(){ running=false; paused=false; tapBtn.disabled=true; }
   function gameOver(){
     stopGame();
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
-  // ランキング（名前なし）
-  const KEY='skillcheck_top5_v3_noname';
+  // ランキング（名前無し：日付＋連続回数）
+  const KEY='skillcheck_top5_sweep_noname_v1';
   function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
   function saveScore(entry){
     if(entry.score<=0) return;
@@ -293,19 +299,20 @@
   function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
 
   // イベント
-  startBtn.addEventListener('click', startGame);
-  pauseBtn.addEventListener('click', pauseGame);
-  muteBtn.addEventListener('click', ()=>{ muted=!muted; successAudio.muted=muted; muteBtn.textContent = muted?'🔇 ミュート中':'🔈 ミュート'; });
-  rankBtn.addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); });
-  closeRank.addEventListener('click', ()=>rankDlg.close());
-  resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); });
+  startBtn.addEventListener('click', startGame, {passive:true});
+  pauseBtn.addEventListener('click', pauseGame, {passive:true});
+  muteBtn.addEventListener('click', ()=>{ muted=!muted; successAudio.muted=muted; muteBtn.textContent = muted?'🔇 ミュート中':'🔈 ミュート'; }, {passive:true});
+  rankBtn.addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); }, {passive:true});
+  closeRank.addEventListener('click', ()=>rankDlg.close(), {passive:true});
+  resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); }, {passive:true});
 
-  tapBtn.addEventListener('click', tryCheck);
-  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); tryCheck(); } });
+  // 入力：遅延の少ないpointerdown
+  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  // スペースキーでも判定
+  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
   // 初期
   renderRanking();
-  // 初期リサイズ（iOSレイアウト直後にサイズ0問題を避けるため遅延1フレーム）
   requestAnimationFrame(resizeCanvas);
 })();
 </script>
