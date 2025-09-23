@@ -178,14 +178,14 @@
 
     // ベースリング
     ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
-    ctx.lineWidth = 24; ctx.strokeStyle = '#1a2330'; ctx.stroke();
+    ctx.lineWidth = 20; ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
     // 白ゾーン（成功範囲）※シャドウ無しで軽量化
-    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.lineWidth = 20; ctx.strokeStyle = '#ffffff';
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
 
     // スイープ（通過マーカー：薄いグレー）
-    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#bfc7d1';
+    ctx.beginPath(); ctx.lineWidth = 20; ctx.strokeStyle = '#bfc7d1';
     ctx.arc(CX, CY, rOuter, sweepCenter - markerSize/2, sweepCenter + markerSize/2); ctx.stroke();
 
     // 赤い固定針（常に12時方向）
