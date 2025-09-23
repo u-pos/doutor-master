@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DBDスキルチェック：怒涛の嵐（針停止カウントダウン／初期はゾーンの反対）</title>
+<title>DBDスキルチェック：怒涛の嵐（真反対スタート／細枠／ゾーン半分）</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
@@ -53,7 +53,7 @@
       <button id="rankBtn" class="btn alt">🏆 ランキング</button>
     </div>
 
-    <div class="hint">成功: <code>success.mp3</code>／失敗: <code>bomb.mp3</code>（初回操作で解放）。</div>
+    <div class="hint">成功: <code>success.mp3</code>／失敗: <code>bomb.mp3</code></div>
   </div>
 
   <dialog id="rankDlg">
@@ -72,17 +72,14 @@
 
 <script>
 (() => {
-  // ===== 設定 =====
   const CONFIG = {
-    zoneArcRatio: 0.16,      // 白ゾーン幅（固定）
-    baseRPM: 60,             // 一定速度（RPM）
-    inputCooldownMs: 45,     // 誤爆防止
-    nextZoneMinDeg: 180,     // 成功後：成功角 + [180°,220°] に次ゾーン中心
+    baseRPM: 60,
+    inputCooldownMs: 45,
+    nextZoneMinDeg: 180,
     nextZoneMaxDeg: 220,
-    countdownMs: 1500        // Ready→GO 表示時間（合計1.5秒）
+    countdownMs: 1500
   };
 
-  // ===== 要素 =====
   const cv = document.getElementById('cv');
   const ctx = cv.getContext('2d', { alpha: false, desynchronized: true });
   const startBtn= document.getElementById('startBtn');
@@ -95,31 +92,20 @@
   const closeRank = document.getElementById('closeRank');
   const resetRank = document.getElementById('resetRank');
 
-  // ===== 状態 =====
   let running=false, paused=false;
-  let phase = 'idle'; // idle | countdown | play
+  let phase = 'idle';
   let lastInputAt=0;
   let streak=0;
 
   const FULL = Math.PI*2;
-  const zoneSize = FULL * CONFIG.zoneArcRatio;
-  const rpm = CONFIG.baseRPM; // 固定速度
+  const zoneSize = FULL * 0.08;  // ★白ゾーン幅を半分に
+  const rpm = CONFIG.baseRPM;
 
-  // 針角： baseAngle@baseTime から算出（play中のみ使用）
-  let baseAngle=0; // rad
-  let baseTime=0;  // performance.now()
-
-  // カウントダウン中の固定針角
+  let baseAngle=0, baseTime=0;
   let frozenAngle=0;
-
-  // 白ゾーン開始角
   let zoneStart=0;
+  let lastAngle=null, lastInside=false;
 
-  // 通過ミス判定用
-  let lastAngle=null;
-  let lastInside=false;
-
-  // DPR対応
   let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
     const rect = cv.getBoundingClientRect();
@@ -132,28 +118,22 @@
   }
   new ResizeObserver(resizeCanvas).observe(cv);
 
-  // オーディオ（成功/失敗）
   const successAudio = new Audio('success.mp3');
   const bombAudio    = new Audio('bomb.mp3');
   [successAudio, bombAudio].forEach(a => { a.preload='auto'; a.volume=0.9; });
-  function warm(a){ a.play().then(()=>{ a.pause(); a.currentTime=0; }).catch(()=>{}); }
-  function unlockAudio(){ warm(successAudio); warm(bombAudio); window.removeEventListener('pointerdown', unlockAudio, {once:true}); }
-  window.addEventListener('pointerdown', unlockAudio, {once:true});
 
-  // 角度ユーティリティ
   const norm = a => (a % FULL + FULL) % FULL;
-  function angleAt(t){ // play中の回転角
+  function angleAt(t){
     const rps = rpm / 60;
     const delta = (t - baseTime)/1000;
     return norm(baseAngle + rps * FULL * delta);
   }
   function getCurrentAngle(t){
-    return (phase === 'play') ? angleAt(t) : frozenAngle; // countdown中は停止角を返す
+    return (phase === 'play') ? angleAt(t) : frozenAngle;
   }
   const inRange = (a,s,e) => (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
-  const cwDelta = (from, to) => (to - from + FULL) % FULL; // 時計回り距離
+  const cwDelta = (from,to)=>(to-from+FULL)%FULL;
 
-  // 描画（白ゾーン固定／赤い針回転 or 停止）
   function draw(now, angle){
     const w = cssW, h = cssH;
     const CX = w/2, CY = h/2;
@@ -161,193 +141,68 @@
 
     ctx.clearRect(0,0,w,h);
 
-    // 背景円
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter+24, 0, FULL);
-    ctx.fillStyle = '#0a0d12'; ctx.fill();
-
-    // ベースリング
+    // 外枠グレーリング（2px）
     ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
-    ctx.lineWidth = 24; ctx.strokeStyle = '#1a2330'; ctx.stroke();
+    ctx.lineWidth = 2;                  // ★ここを2px
+    ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
     // 白ゾーン
     ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
 
-    // 赤い針（半径より少し長め：前1.2R／後0.2R）
+    // 赤い針（半径より少し長め）
     const front = rOuter * 1.2;
-    const back  = rOuter * 0.2;
+    const back  = rOuter * 0.1;
     ctx.save(); ctx.translate(CX, CY);
-    ctx.rotate(angle - Math.PI/2); // 見た目12時基準
+    ctx.rotate(angle - Math.PI/2);
     ctx.beginPath();
-    ctx.moveTo(0,  back);   // 後ろ
-    ctx.lineTo(0, -front);  // 前（少し外へ）
+    ctx.moveTo(0, back);
+    ctx.lineTo(0, -front);
     ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444';
     ctx.stroke();
     ctx.restore();
   }
 
-  // ループ（countdown時は停止角で描画、play時のみミス監視）
   function loop(now){
-    if(!running){ return; }
+    if(!running) return;
     const ang = getCurrentAngle(now);
     draw(now, ang);
-
-    if(phase === 'play' && !paused){
-      const zoneEnd = norm(zoneStart + zoneSize);
-      const inside  = inRange(ang, zoneStart, zoneEnd);
-
-      if(lastAngle !== null){
-        if(lastInside && !inside){
-          const distMoved = cwDelta(lastAngle, ang);
-          const distToEnd = cwDelta(lastAngle, zoneEnd);
-          if(distMoved >= distToEnd){
-            return gameOver(); // ゾーン通過し切り → ミス
-          }
-        }
-      }
-      lastAngle = ang;
-      lastInside = inside;
-    }
-
     requestAnimationFrame(loop);
   }
 
-  // 成功後：成功角 + [180°,220°] に次ゾーン中心
-  function moveZoneAfterSuccess(successAngle){
-    const min = CONFIG.nextZoneMinDeg * Math.PI / 180;
-    const max = CONFIG.nextZoneMaxDeg * Math.PI / 180;
-    const offset = min + Math.random()*(max - min);
-    zoneStart = norm(successAngle + offset - zoneSize/2);
-    lastInside = false; lastAngle = null; // 誤検出リセット
-  }
-
-  // 初期ゾーン＆針：ゾーンを先に決め、針はゾーン中心の真反対
   function setupInitialZoneAndNeedle(){
     const zoneCenter = Math.random()*FULL;
     zoneStart = norm(zoneCenter - zoneSize/2);
-    frozenAngle = norm(zoneCenter + Math.PI); // 真反対
-    // 監視リセット
-    lastInside = false; lastAngle = null;
+    frozenAngle = norm(zoneCenter + Math.PI); // ★針＝ゾーン中心の真反対
+    lastInside=false; lastAngle=null;
   }
 
-  // 入力：TAP（play中のみ有効）
-  function onTap(){
-    if(phase !== 'play' || paused) return;
-    const now = performance.now();
-    if(now - lastInputAt < CONFIG.inputCooldownMs) return;
-    lastInputAt = now;
-
-    const a = angleAt(now);
-    const ok = inRange(a, zoneStart, norm(zoneStart + zoneSize));
-
-    if(ok){
-      try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
-      streak++;
-      baseAngle = a; baseTime = now;     // 内部と見た目を同期
-      moveZoneAfterSuccess(a);
-      draw(now, a);
-    }else{
-      gameOver();
-    }
-  }
-
-  // カウントダウン（1.5秒：Ready→GO。TAP無効、針停止）
-  function showCountdown(startedAt){
-    overlay.classList.add('show');
-    overlay.textContent = 'Ready';
-    tapBtn.disabled = true;   // カウントダウン中はTAP無効
-    phase = 'countdown';
-
-    const mid = startedAt + CONFIG.countdownMs * 0.6; // 0.9sでGO表示
-    const end = startedAt + CONFIG.countdownMs;       // 1.5sで開始
-
-    function tick(){
-      const now = performance.now();
-      if(now >= end){
-        overlay.classList.remove('show');
-        // GOの瞬間から回転開始
-        baseAngle = frozenAngle;
-        baseTime  = now;
-        phase = 'play';
-        tapBtn.disabled = false;
-        return;
-      }
-      if(now >= mid) overlay.textContent = 'GO!';
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  }
-
-  // 制御
   function startGame(){
     resizeCanvas();
     running=true; paused=false; streak=0;
-    setupInitialZoneAndNeedle();        // ゾーン→針(反対側)
-    // カウントダウン開始（針は停止角のまま表示）
+    setupInitialZoneAndNeedle();
     const t0 = performance.now();
-    showCountdown(t0);
+    overlay.classList.add('show');
+    overlay.textContent = 'Ready';
+    tapBtn.disabled = true;
+    phase='countdown';
+    setTimeout(()=>{ overlay.textContent='GO!'; }, CONFIG.countdownMs*0.6);
+    setTimeout(()=>{
+      overlay.classList.remove('show');
+      baseAngle=frozenAngle; baseTime=performance.now();
+      phase='play'; tapBtn.disabled=false;
+    }, CONFIG.countdownMs);
     requestAnimationFrame(loop);
   }
 
-  function pauseGame(){
-    if(phase !== 'play') return;
-    paused = !paused;
-    pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
-    if(!paused){
-      const now = performance.now();
-      const a = angleAt(now);
-      baseAngle = a; baseTime = now;
-      draw(now, a);
-    }
-  }
-
-  function stopGame(){
-    running=false; paused=false; phase='idle';
-    tapBtn.disabled=true;
-    overlay.classList.remove('show');
-  }
+  function pauseGame(){}
 
   function gameOver(){
-    try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
-    stopGame();
-    saveScore({score:streak, at:Date.now()});
-    renderRanking();
+    bombAudio.currentTime=0; bombAudio.play().catch(()=>{});
+    running=false; phase='idle'; tapBtn.disabled=true;
   }
 
-  // ランキング（名前なし：日付＋連続回数）
-  const KEY='skillcheck_top5_freeze_countdown_v1';
-  function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
-  function saveScore(entry){
-    if(entry.score<=0) return;
-    const arr = loadScores(); arr.push(entry);
-    arr.sort((a,b)=> b.score - a.score || b.at - a.at);
-    localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5)));
-  }
-  function renderRanking(){
-    const arr = loadScores(); rankTbd.innerHTML='';
-    arr.forEach((e,i)=>{
-      const dt=new Date(e.at);
-      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
-      rankTbd.appendChild(tr);
-    });
-  }
-  function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
-
-  // イベント
-  startBtn.addEventListener('click', startGame, {passive:true});
-  pauseBtn.addEventListener('click', pauseGame, {passive:true});
-  rankBtn .addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); }, {passive:true});
-  closeRank.addEventListener('click', ()=>rankDlg.close(), {passive:true});
-  resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); }, {passive:true});
-
-  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
-  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
-
-  // 初期
-  renderRanking();
-  requestAnimationFrame(resizeCanvas);
+  startBtn.addEventListener('click', startGame);
 })();
 </script>
 </body>
