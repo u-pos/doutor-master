@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DBDスキルチェック：怒涛の嵐 連続チャレンジ</title>
+<style>
+  :root{
+    --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#4ade80; --warn:#f59e0b; --danger:#ef4444;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px}
+  .topbar{width:100%;max-width:680px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .title{font-weight:700;font-size:clamp(16px,2.8vw,22px)}
+  .stats{display:flex;gap:10px;font-weight:600}
+  .btns{display:flex;gap:8px}
+  button{
+    border:1px solid #26303a;background:#161a21;color:var(--fg);border-radius:10px;
+    padding:10px 12px;font-weight:700;cursor:pointer;touch-action:manipulation
+  }
+  button:active{transform:translateY(1px)}
+  button.primary{background:#1f2937;border-color:#334155}
+  button.accent{background:#12331c;border-color:#1f6d39;color:#bbf7d0}
+  button.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
+  button.danger{background:#3a1515;border-color:#7f1d1d;color:#fecaca}
+  .board{width:100%;max-width:680px;aspect-ratio:1/1;position:relative}
+  canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
+  .hint{font-size:14px;color:var(--muted);text-align:center}
+  .footer{margin-top:auto;font-size:12px;color:var(--muted)}
+  dialog{
+    border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:var(--fg)
+  }
+  .dlg-head{padding:14px 16px;border-bottom:1px solid #253040;font-weight:700}
+  .dlg-body{padding:12px 16px}
+  .rank-list{width:100%;border-collapse:collapse}
+  .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
+  .rank-list th{color:#aab4bf;font-weight:600}
+  .kbd{display:inline-block;border:1px solid #2a3442;border-bottom-width:2px;border-radius:6px;padding:2px 6px;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="title">DBDスキルチェック：怒涛の嵐 連続チャレンジ</div>
+      <div class="btns">
+        <button id="startBtn" class="primary">▶ スタート</button>
+        <button id="pauseBtn" class="warn">⏸ 一時停止</button>
+        <button id="muteBtn">🔈 ミュート</button>
+        <button id="rankBtn" class="accent">🏆 ランキング</button>
+      </div>
+    </div>
+
+    <div class="topbar" style="margin-top:-6px">
+      <div class="stats">
+        <div>連続成功: <span id="streak">0</span></div>
+        <div>ベスト: <span id="best">0</span></div>
+        <div>速度: <span id="speed">1.0x</span></div>
+      </div>
+      <div class="hint">スペース / 画面タップ で判定。Good/Greatゾーンは本家風の幅やで。</div>
+    </div>
+
+    <div class="board">
+      <canvas id="cv" width="800" height="800"></canvas>
+    </div>
+
+    <div class="footer">※ 成功時に <code>success.mp3</code> を再生。iOS対策で最初のタップ時に音の権限を解放します。</div>
+  </div>
+
+  <dialog id="rankDlg">
+    <div class="dlg-head">🏆 オフライン TOP5</div>
+    <div class="dlg-body">
+      <table class="rank-list" id="rankTable">
+        <thead><tr><th>#</th><th>名前</th><th>連続成功</th><th>日時</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button id="closeRank">閉じる</button>
+        <button id="resetRank" class="danger">リセット</button>
+      </div>
+    </div>
+  </dialog>
+
+<script>
+(() => {
+  // ====== 調整パラメータ（DBD風幅の近似）======
+  const CONFIG = {
+    goodArcRatio: 0.18,   // 円周に対するGood成功ゾーン比率（約18%）
+    greatArcRatio: 0.04,  // Good内に含まれるGreatゾーン（約4%）
+    baseRPM: 60,          // 初期回転スピード（1分間に何周）→ゲーム表示ではx倍に換算
+    rpmIncrease: 6,       // 成功ごとのRPM増加
+    maxRPM: 180,          // 上限
+    pointerWidth: 6,      // ポインタ太さ（px）
+    inputCooldownMs: 250, // 入力連打対策
+    nameMaxLen: 12
+  };
+
+  // ====== 状態管理 ======
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const muteBtn  = document.getElementById('muteBtn');
+  const rankBtn  = document.getElementById('rankBtn');
+  const rankDlg  = document.getElementById('rankDlg');
+  const rankTable= document.querySelector('#rankTable tbody');
+  const closeRank= document.getElementById('closeRank');
+  const resetRank= document.getElementById('resetRank');
+
+  const elStreak = document.getElementById('streak');
+  const elBest   = document.getElementById('best');
+  const elSpeed  = document.getElementById('speed');
+
+  let running = false;
+  let paused  = false;
+  let muted   = false;
+  let lastInputAt = 0;
+
+  // 回転 & ゾーン
+  let angle = 0; // ラジアン（0は上方向）
+  let rpm = CONFIG.baseRPM;
+  let zoneStart = 0; // ゾーン開始角（rad）
+  let zoneSize  = Math.PI * 2 * CONFIG.goodArcRatio;
+  let greatSize = Math.PI * 2 * CONFIG.greatArcRatio;
+  let streak = 0;
+  let best = loadBest() || 0;
+
+  // オーディオ
+  const successAudio = new Audio('success.mp3');
+  successAudio.preload = 'auto';
+  successAudio.volume = 0.9;
+
+  // iOS/モバイルの再生解放
+  function unlockAudio() {
+    successAudio.muted = muted;
+    // 無音再生で解放（catchで握りつぶし）
+    successAudio.play().then(()=>{ successAudio.pause(); successAudio.currentTime = 0; }).catch(()=>{});
+    window.removeEventListener('pointerdown', unlockAudio, {once:true});
+  }
+  window.addEventListener('pointerdown', unlockAudio, {once:true});
+
+  // レイアウト・描画
+  function draw() {
+    const w = cv.width, h = cv.height;
+    const CX = w/2, CY = h/2;
+    const rOuter = Math.min(w,h)*0.42;
+    const rInner = rOuter - 36;
+
+    ctx.clearRect(0,0,w,h);
+
+    // 背景円
+    ctx.beginPath();
+    ctx.arc(CX, CY, rOuter+24, 0, Math.PI*2);
+    ctx.fillStyle = '#0a0d12';
+    ctx.fill();
+
+    // リング
+    ctx.beginPath();
+    ctx.arc(CX, CY, rOuter, 0, Math.PI*2);
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = '#1a2330';
+    ctx.stroke();
+
+    // Goodゾーン
+    ctx.beginPath();
+    ctx.strokeStyle = '#1f9d55'; // 緑
+    ctx.lineWidth = 24;
+    ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize);
+    ctx.stroke();
+
+    // Greatゾーン（Goodの中）
+    const greatStart = zoneStart + (zoneSize - greatSize)/2;
+    ctx.beginPath();
+    ctx.strokeStyle = '#fbbf24'; // 黄
+    ctx.lineWidth = 24;
+    ctx.arc(CX, CY, rOuter, greatStart, greatStart+greatSize);
+    ctx.stroke();
+
+    // 目盛り（飾り）
+    ctx.save();
+    ctx.translate(CX, CY);
+    const ticks = 32;
+    for(let i=0;i<ticks;i++){
+      const a = i*(Math.PI*2/ticks);
+      const x1 = Math.cos(a)*(rInner-10), y1 = Math.sin(a)*(rInner-10);
+      const x2 = Math.cos(a)*(rInner-2),  y2 = Math.sin(a)*(rInner-2);
+      ctx.beginPath();
+      ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      ctx.strokeStyle = '#263146'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.restore();
+
+    // ポインタ
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(0, -rInner);
+    ctx.lineWidth = CONFIG.pointerWidth;
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.shadowColor = '#93c5fd';
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.restore();
+
+    // 中央ラベル
+    ctx.fillStyle = '#9aa4af';
+    ctx.font = '700 28px system-ui, -apple-system, Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText(`怒涛の嵐 連続 ${streak}`, CX, CY+10);
+  }
+
+  function resizeCanvas() {
+    // デバイスピクセル比対応
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const rect = cv.getBoundingClientRect();
+    cv.width  = Math.round(rect.width  * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0); // スケールは描画で考慮済
+    draw();
+  }
+  new ResizeObserver(resizeCanvas).observe(cv);
+
+  // ゾーンの再配置
+  function randomizeZone() {
+    const pad = 0.15; // 上方向すぐに来ないよう軽いばらつき
+    const full = Math.PI*2;
+    zoneStart = Math.random() * full;
+    // 連続で似た位置になりやすいとしんどいので少しオフセット
+    zoneStart = (zoneStart + (Math.random()*pad - pad/2)) % full;
+  }
+
+  // 速度表示
+  function updateHUD() {
+    elStreak.textContent = String(streak);
+    elBest.textContent   = String(best);
+    const speedX = (rpm / CONFIG.baseRPM).toFixed(1);
+    elSpeed.textContent  = `${speedX}x`;
+  }
+
+  // ループ
+  let lastTs = 0;
+  function loop(ts){
+    if(!running){ return; }
+    if(paused){
+      requestAnimationFrame(loop);
+      return;
+    }
+    if(!lastTs) lastTs = ts;
+    const dt = (ts - lastTs)/1000; // 秒
+    lastTs = ts;
+
+    // 回転
+    const rps = rpm / 60; // per second
+    angle = (angle + rps * Math.PI*2 * dt) % (Math.PI*2);
+
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // 入力処理
+  function tryCheck(){
+    const now = performance.now();
+    if(now - lastInputAt < CONFIG.inputCooldownMs) return;
+    lastInputAt = now;
+
+    if(!running) return;
+
+    const a = angleNorm(angle);
+    const g0 = angleNorm(zoneStart);
+    const g1 = angleNorm(zoneStart + zoneSize);
+
+    const inGood = angleInRange(a, g0, g1);
+
+    if(inGood){
+      // 成功！
+      playSuccess();
+      streak++;
+      best = Math.max(best, streak);
+      // 難易度アップ
+      rpm = Math.min(CONFIG.maxRPM, rpm + CONFIG.rpmIncrease);
+      randomizeZone();
+      updateHUD();
+    }else{
+      // 失敗 → ゲームオーバー
+      gameOver();
+    }
+  }
+
+  function angleNorm(a){
+    const two = Math.PI*2;
+    return (a % two + two) % two;
+  }
+  function angleInRange(a, start, end){
+    // 円環レンジ判定（start<=a<=end、跨ぎ対応）
+    if(start<=end) return a>=start && a<=end;
+    return a>=start || a<=end;
+  }
+
+  // サウンド
+  function playSuccess(){
+    if(muted) return;
+    try{
+      successAudio.currentTime = 0;
+      successAudio.play().catch(()=>{});
+    }catch(_){}
+  }
+
+  // ゲーム制御
+  function startGame(){
+    running = true; paused = false;
+    lastTs = 0; angle = 0; rpm = CONFIG.baseRPM; streak = 0;
+    randomizeZone();
+    updateHUD();
+    requestAnimationFrame(loop);
+  }
+  function pauseGame(){
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
+  }
+  function stopGame(){
+    running = false; paused = false; lastTs = 0;
+  }
+
+  function gameOver(){
+    stopGame();
+    updateHUD();
+    // 名前入力（キャンセル可）
+    const name = (prompt('失敗！記録を登録するで？\n名前（任意・'+CONFIG.nameMaxLen+'文字まで）','')||'').trim().slice(0, CONFIG.nameMaxLen);
+    if(streak>0){
+      saveScore({name: name||'名無しさん', score: streak, at: Date.now()});
+      renderRanking();
+    }
+  }
+
+  // ランキング（ローカル）
+  const KEY = 'skillcheck_top5';
+  function loadScores(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr)? arr : [];
+    }catch{return []}
+  }
+  function saveScore(entry){
+    const arr = loadScores();
+    arr.push(entry);
+    arr.sort((a,b)=> b.score - a.score || b.at - a.at);
+    const top5 = arr.slice(0,5);
+    localStorage.setItem(KEY, JSON.stringify(top5));
+    // ベスト更新
+    best = Math.max(best, top5[0]?.score||0);
+    updateHUD();
+  }
+  function loadBest(){
+    const arr = loadScores();
+    return arr[0]?.score||0;
+  }
+  function renderRanking(){
+    const arr = loadScores();
+    rankTable.innerHTML = '';
+    arr.forEach((e,i)=>{
+      const tr = document.createElement('tr');
+      const dt = new Date(e.at);
+      const dstr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(e.name)}</td><td>${e.score}</td><td>${dstr}</td>`;
+      rankTable.appendChild(tr);
+    });
+  }
+  function resetRanking(){
+    localStorage.removeItem(KEY);
+    renderRanking();
+    best = 0; updateHUD();
+  }
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // イベント
+  startBtn.addEventListener('click', ()=>{ startGame(); });
+  pauseBtn.addEventListener('click', ()=>{ if(running) pauseGame(); });
+  muteBtn.addEventListener('click', ()=>{
+    muted = !muted;
+    successAudio.muted = muted;
+    muteBtn.textContent = muted ? '🔇 ミュート中' : '🔈 ミュート';
+  });
+  rankBtn.addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); });
+  closeRank.addEventListener('click', ()=> rankDlg.close());
+  resetRank.addEventListener('click', ()=>{
+    if(confirm('ランキングをリセットするで？')) resetRanking();
+  });
+
+  // 入力（スペース/タップ）
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){ e.preventDefault(); tryCheck(); }
+  });
+  cv.addEventListener('pointerdown', ()=>{ tryCheck(); });
+
+  // 初期
+  renderRanking();
+  updateHUD();
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
