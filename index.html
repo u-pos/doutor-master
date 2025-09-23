@@ -16,10 +16,6 @@
 
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
-  .streak-badge{
-    position:absolute;left:50%;top:10px;transform:translateX(-50%);
-    background:#111827;border:1px solid #243042;border-radius:999px;padding:6px 12px;font-weight:800
-  }
 
   .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
   #tapBtn{
@@ -43,30 +39,34 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- 上部はスタートだけ -->
     <div class="topbar">
       <button id="startBtn" class="btn primary">▶ スタート</button>
     </div>
 
+    <!-- 盤面 -->
     <div class="board">
-      <div class="streak-badge">連続成功: <span id="streak">0</span></div>
       <canvas id="cv"></canvas>
     </div>
 
+    <!-- 円の下にTAPボタン -->
     <div class="tap-row">
       <button id="tapBtn" aria-label="Tap to check" disabled>TAP</button>
     </div>
 
+    <!-- 下部コントロール：ミュート削除 → スタート/一時停止/ランキング -->
     <div class="bottombar">
       <div class="ctrls">
-        <button id="muteBtn" class="btn">🔈 ミュート</button>
+        <button id="startBtn2" class="btn primary">▶ スタート</button>
         <button id="pauseBtn" class="btn warn">⏸ 一時停止</button>
         <button id="rankBtn" class="btn accent">🏆 ランキング</button>
       </div>
     </div>
 
-    <div class="hint">※ 成功時に <code>success.mp3</code> を再生（初回操作で解放）。</div>
+    <div class="hint">※ 成功時に <code>success.mp3</code>、失敗時に <code>bomb.mp3</code> を再生（初回操作で解放）。</div>
   </div>
 
+  <!-- ランキング（名前なし：日付＋連続回数） -->
   <dialog id="rankDlg">
     <div class="dlg-head">🏆 オフライン TOP5</div>
     <div class="dlg-body">
@@ -83,11 +83,10 @@
 
 <script>
 (() => {
-  // ===== 固定設定（本家寄せ） =====
+  // ===== 固定設定（本家寄せ・ラグ対策込み） =====
   const CONFIG = {
-    zoneArcRatio: 0.16,          // ★白ゾーン幅は常に0.16に固定
-    baseRPM: 60,                 // ★常に一定速度（RPM）
-    rpmIncrease: 0,              // ★成功しても速度は一切上げない
+    zoneArcRatio: 0.16,          // ★白ゾーン幅は常に0.16
+    baseRPM: 60,                 // ★一定速度（RPM）
     markerArcRatio: 0.02,        // スイープ可視用の幅
     inputCooldownMs: 45,         // 低レイテンシ・誤爆防止
     nextZoneMinDeg: 180,         // 成功後の次ゾーン中心オフセット範囲（度）
@@ -97,20 +96,20 @@
   // ===== 要素 =====
   const cv = document.getElementById('cv');
   const ctx = cv.getContext('2d', { alpha: false, desynchronized: true });
-  const startBtn= document.getElementById('startBtn');
-  const pauseBtn= document.getElementById('pauseBtn');
-  const muteBtn = document.getElementById('muteBtn');
-  const rankBtn = document.getElementById('rankBtn');
-  const tapBtn  = document.getElementById('tapBtn');
-  const rankDlg = document.getElementById('rankDlg');
-  const rankTbd = document.querySelector('#rankTable tbody');
-  const closeRank = document.getElementById('closeRank');
-  const resetRank = document.getElementById('resetRank');
-  const elStreak = document.getElementById('streak');
+  const startBtn = document.getElementById('startBtn');
+  const startBtn2= document.getElementById('startBtn2');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const rankBtn  = document.getElementById('rankBtn');
+  const tapBtn   = document.getElementById('tapBtn');
+  const rankDlg  = document.getElementById('rankDlg');
+  const rankTbd  = document.querySelector('#rankTable tbody');
+  const closeRank= document.getElementById('closeRank');
+  const resetRank= document.getElementById('resetRank');
 
   // ===== 状態 =====
-  let running=false, paused=false, muted=false;
+  let running=false, paused=false;
   let lastInputAt=0;
+  let streak=0;
 
   const FULL = Math.PI*2;
   const zoneSize = FULL * CONFIG.zoneArcRatio;
@@ -126,9 +125,6 @@
   // 白ゾーンの開始角
   let zoneStart=0;
 
-  // 連続回数
-  let streak=0;
-
   // DPR対応
   let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
@@ -142,16 +138,21 @@
   }
   new ResizeObserver(resizeCanvas).observe(cv);
 
-  // オーディオ
+  // ===== オーディオ（成功/失敗・事前デコード） =====
   const successAudio = new Audio('success.mp3');
-  successAudio.preload='auto'; successAudio.volume=0.9;
+  const bombAudio    = new Audio('bomb.mp3');
+  [successAudio, bombAudio].forEach(a => { a.preload='auto'; a.volume=0.9; });
+  function warmAudio(a){
+    a.play().then(()=>{ a.pause(); a.currentTime=0; }).catch(()=>{});
+  }
   function unlockAudio(){
-    successAudio.play().then(()=>{successAudio.pause();successAudio.currentTime=0;}).catch(()=>{});
+    warmAudio(successAudio);
+    warmAudio(bombAudio);
     window.removeEventListener('pointerdown', unlockAudio, {once:true});
   }
   window.addEventListener('pointerdown', unlockAudio, {once:true});
 
-  // 角度計算
+  // ===== 角度計算 =====
   const norm = a => (a % FULL + FULL) % FULL;
   function sweepAngleAt(t){
     const rps = rpm / 60;
@@ -160,7 +161,7 @@
   }
   const inRange = (a,s,e) => (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
 
-  // 描画（赤い固定針＋白ゾーン＋グレーの通過マーカー）
+  // ===== 描画（赤い固定針＋白ゾーン＋グレーの通過マーカー） =====
   function draw(now){
     const w = cssW, h = cssH;
     const CX = w/2, CY = h/2;
@@ -179,11 +180,9 @@
     ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
     ctx.lineWidth = 24; ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
-    // 白ゾーン（成功範囲）
+    // 白ゾーン（成功範囲）※シャドウ無しで軽量化
     ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
-    ctx.shadowColor = '#cbd5e1'; ctx.shadowBlur = 6;
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // スイープ（通過マーカー：薄いグレー）
     ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#bfc7d1';
@@ -195,12 +194,6 @@
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -rInner);
     ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
     ctx.restore();
-
-    // ラベル
-    ctx.fillStyle = '#9aa4af';
-    ctx.font = '700 22px system-ui, -apple-system, Segoe UI';
-    ctx.textAlign = 'center';
-    ctx.fillText(`怒涛の嵐 連続 ${streak}`, CX, CY+10);
   }
 
   // ループ
@@ -215,7 +208,7 @@
     const min = CONFIG.nextZoneMinDeg * Math.PI / 180;
     const max = CONFIG.nextZoneMaxDeg * Math.PI / 180;
     const offset = min + Math.random()*(max - min);
-    // ゾーンは「中心= successAngle+offset」。開始角は中心 - zoneSize/2
+    // 中心 = successAngle+offset、開始角は中心 - zoneSize/2
     zoneStart = norm(successAngle + offset - zoneSize/2);
   }
 
@@ -224,8 +217,8 @@
     zoneStart = Math.random()*FULL;
   }
 
-  // 入力：押した瞬間の角度で即判定（低レイテンシ）
-  function onTap(ev){
+  // 入力：押した瞬間の角度で即判定（低レイテンシ＆描画待ちなし）
+  function onTap(){
     if(!running || paused) return;
     const now = performance.now();
     if(now - lastInputAt < CONFIG.inputCooldownMs) return;
@@ -235,12 +228,12 @@
     const ok = inRange(a, zoneStart, norm(zoneStart + zoneSize));
 
     if(ok){
-      // 見た目と内部を一致
+      // 内部時間の基準更新（見た目と同期）
       baseAngle = a; baseTime = now;
-      if(!muted){ try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{} }
-      streak++; elStreak.textContent = String(streak);
-      // 速度は固定のまま（変更しない）
+      try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
+      streak++;
       moveZoneAfterSuccess(a);
+      // すぐ描画（体感ラグの最小化）
       draw(now);
     }else{
       gameOver();
@@ -250,7 +243,7 @@
   // 制御
   function startGame(){
     resizeCanvas();
-    running=true; paused=false; streak=0; elStreak.textContent='0';
+    running=true; paused=false; streak=0;
     baseAngle=0; baseTime=performance.now();
     randomizeZoneInitial();
     tapBtn.disabled=false;
@@ -269,13 +262,14 @@
   function stopGame(){ running=false; paused=false; tapBtn.disabled=true; }
 
   function gameOver(){
+    try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
     stopGame();
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
   // ランキング（名前なし：日付＋連続回数）
-  const KEY='skillcheck_top5_fixedspeed_v1';
+  const KEY='skillcheck_top5_fixedspeed_v2_bomb';
   function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
   function saveScore(entry){
     if(entry.score<=0) return;
@@ -296,14 +290,15 @@
   function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
 
   // イベント
-  startBtn.addEventListener('click', startGame, {passive:true});
-  pauseBtn.addEventListener('click', pauseGame, {passive:true});
-  muteBtn.addEventListener('click', ()=>{ muted=!muted; successAudio.muted=muted; muteBtn.textContent = muted?'🔇 ミュート中':'🔈 ミュート'; }, {passive:true});
-  rankBtn.addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); }, {passive:true});
+  const startBoth = () => startGame();
+  startBtn .addEventListener('click', startBoth, {passive:true});
+  startBtn2.addEventListener('click', startBoth, {passive:true});
+  pauseBtn .addEventListener('click', pauseGame, {passive:true});
+  rankBtn  .addEventListener('click', ()=>{ renderRanking(); rankDlg.showModal(); }, {passive:true});
   closeRank.addEventListener('click', ()=>rankDlg.close(), {passive:true});
   resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); }, {passive:true});
 
-  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
   // 初期
