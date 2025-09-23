@@ -3,17 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>DBDスキルチェック：怒涛の嵐（スイープ型・低レイテンシ）</title>
+<title>DBDスキルチェック：怒涛の嵐（赤針＋白ゾーン）</title>
 <style>
-  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#4ade80; --warn:#f59e0b; --danger:#ef4444; }
+  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#ffffff; --danger:#ef4444; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px}
   .topbar{width:100%;max-width:720px;display:flex;justify-content:center;align-items:center}
   .btn{border:1px solid #26303a;background:#161a21;color:var(--fg);border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer;touch-action:manipulation}
   .btn.primary{background:#1f2937;border-color:#334155}
-  .btn.accent{background:#12331c;border-color:#1f6d39;color:#bbf7d0}
   .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
-  .btn.danger{background:#3a1515;border-color:#7f1d1d;color:#fecaca}
+  .btn.accent{background:#122031;border-color:#2a3f59}
 
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
@@ -25,13 +24,13 @@
   /* 円の下に置く大きめのTAPボタン（長方形） */
   .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
   #tapBtn{
-    width:min(92%,560px);height:68px;border-radius:16px;border:2px solid #334155;
+    width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;
     background:#0f131a;color:#e5e7eb;font-weight:900;font-size:clamp(18px,5vw,28px);
     letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35); user-select:none; -webkit-tap-highlight-color:transparent;
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4)}
 
-  /* 画面下部のコントロールバー（ミュート/一時停止/ランキング） */
+  /* 下部コントロール（ミュート/一時停止/ランキング） */
   .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:0;padding-bottom:4px}
   .ctrls{display:flex;gap:8px;margin:0 auto}
   .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:4px}
@@ -46,19 +45,23 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- 上部はスタートだけ -->
     <div class="topbar">
       <button id="startBtn" class="btn primary">▶ スタート</button>
     </div>
 
+    <!-- 盤面 -->
     <div class="board">
       <div class="streak-badge">連続成功: <span id="streak">0</span></div>
       <canvas id="cv"></canvas>
     </div>
 
+    <!-- 円の下にTAPボタン -->
     <div class="tap-row">
       <button id="tapBtn" aria-label="Tap to check" disabled>TAP</button>
     </div>
 
+    <!-- 下部コントロール -->
     <div class="bottombar">
       <div class="ctrls">
         <button id="muteBtn" class="btn">🔈 ミュート</button>
@@ -70,6 +73,7 @@
     <div class="hint">※ 成功時に <code>success.mp3</code> を再生（初回操作で解放）。</div>
   </div>
 
+  <!-- ランキング（名前なし：日付＋連続回数） -->
   <dialog id="rankDlg">
     <div class="dlg-head">🏆 オフライン TOP5</div>
     <div class="dlg-body">
@@ -79,22 +83,23 @@
       </table>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
         <button id="closeRank" class="btn">閉じる</button>
-        <button id="resetRank" class="btn danger">リセット</button>
+        <button id="resetRank" class="btn warn">リセット</button>
       </div>
     </div>
   </dialog>
 
 <script>
 (() => {
-  // ===== 調整パラメータ（DBD風） =====
+  // ===== 調整パラメータ =====
   const CONFIG = {
-    goodArcRatio: 0.18,   // Good幅（円周比）
-    greatArcRatio: 0.04,  // Great幅（Good内センター）
-    baseRPM: 60,          // スイープの初期回転速度（RPM）
-    rpmIncrease: 6,       // 成功ごとに加速
+    zoneArcRatio: 0.18,          // 白ゾーン（Good相当）の幅（円周比）
+    baseRPM: 60,                 // スイープ初速（RPM）
+    rpmIncrease: 6,              // 成功ごと加速
     maxRPM: 180,
-    sweepWidthRatio: 0.02,// 白いスイープマーカーの幅（円周比）※見やすさ
-    inputCooldownMs: 45   // 低レイテンシ・誤爆防止
+    markerArcRatio: 0.02,        // スイープの白い通過マーカー幅（見やすさ用）
+    inputCooldownMs: 45,         // 低レイテンシ・誤爆防止
+    nextZoneMinDeg: 180,         // 次ゾーン最小オフセット（度）
+    nextZoneMaxDeg: 220          // 次ゾーン最大オフセット（度）
   };
 
   // ===== 要素 =====
@@ -115,15 +120,19 @@
   let running=false, paused=false, muted=false;
   let lastInputAt=0;
 
-  // スイープは「針は固定(12時)」で「スイープ角が時間で回る」。
+  const FULL = Math.PI*2;
   let rpm = CONFIG.baseRPM;
-  let baseAngle=0;   // now=baseTime時点のスイープ角（rad）
-  let baseTime=0;    // performance.now()
-  let zoneStart=0;   // Good開始角
-  const full = Math.PI*2;
-  const zoneSize  = full * CONFIG.goodArcRatio;
-  const greatSize = full * CONFIG.greatArcRatio;
-  const sweepSize = full * CONFIG.sweepWidthRatio; // 表示用白マーカーの幅
+
+  // スイープ角は baseAngle @ baseTime から算出
+  let baseAngle=0; // rad
+  let baseTime=0;  // performance.now()
+
+  // 白ゾーン（固定表示）の開始角
+  let zoneStart=0;
+  const zoneSize = FULL * CONFIG.zoneArcRatio;
+  const markerSize = FULL * CONFIG.markerArcRatio;
+
+  // 連続回数
   let streak=0;
 
   // DPR対応
@@ -148,17 +157,16 @@
   }
   window.addEventListener('pointerdown', unlockAudio, {once:true});
 
-  // 角度算出（任意時刻t）
+  // 角度計算
+  const norm = a => (a % FULL + FULL) % FULL;
   function sweepAngleAt(t){
     const rps = rpm / 60;
     const delta = (t - baseTime)/1000;
-    const a = baseAngle + rps * full * delta;
-    return norm(a);
+    return norm(baseAngle + rps * FULL * delta);
   }
-  function norm(a){ return (a % full + full) % full; }
-  function inRange(a,s,e){ return (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e); }
+  const inRange = (a,s,e) => (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
 
-  // 描画
+  // 描画（赤い固定針＋白ゾーン＋グレーの通過マーカー）
   function draw(now){
     const w = cssW, h = cssH;
     const CX = w/2, CY = h/2;
@@ -170,37 +178,31 @@
     ctx.clearRect(0,0,w,h);
 
     // 背景円
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter+24, 0, full);
+    ctx.beginPath(); ctx.arc(CX, CY, rOuter+24, 0, FULL);
     ctx.fillStyle = '#0a0d12'; ctx.fill();
 
     // ベースリング
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, full);
+    ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
     ctx.lineWidth = 24; ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
-    // Goodゾーン（緑）
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#10b981';
+    // 白ゾーン（成功範囲）
+    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
+    ctx.shadowColor = '#cbd5e1'; ctx.shadowBlur = 6;
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
-
-    // Greatゾーン（黄）Goodの中央
-    const greatStart = zoneStart + (zoneSize - greatSize)/2;
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#fbbf24';
-    ctx.arc(CX, CY, rOuter, greatStart, greatStart+greatSize); ctx.stroke();
-
-    // スイープ（白マーカー）— 回ってくるやつ
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#e5e7eb';
-    ctx.shadowColor = '#93c5fd'; ctx.shadowBlur = 8;
-    ctx.arc(CX, CY, rOuter, sweepCenter - sweepSize/2, sweepCenter + sweepSize/2); ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // 固定針（12時方向）
-    ctx.save(); ctx.translate(CX, CY); ctx.rotate(0); // 12時 = 角度0基準を上に
-    // 12時方向に向くよう補正：キャンバスは通常0radが右なので、-90度回転してから描く
-    ctx.rotate(-Math.PI/2);
+    // スイープ（通過マーカー：薄いグレー）
+    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#bfc7d1';
+    ctx.arc(CX, CY, rOuter, sweepCenter - markerSize/2, sweepCenter + markerSize/2); ctx.stroke();
+
+    // 赤い固定針（常に12時方向）
+    ctx.save(); ctx.translate(CX, CY);
+    ctx.rotate(-Math.PI/2); // 12時に向ける
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -rInner);
-    ctx.lineWidth = 6; ctx.strokeStyle = '#e5e7eb'; ctx.stroke();
+    ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
     ctx.restore();
 
-    // ラベル
+    // ラベル（控えめ）
     ctx.fillStyle = '#9aa4af';
     ctx.font = '700 22px system-ui, -apple-system, Segoe UI';
     ctx.textAlign = 'center';
@@ -214,49 +216,48 @@
     requestAnimationFrame(loop);
   }
 
-  // ゾーン再配置
-  function randomizeZone(){
-    // 12時直近ばかり来ないよう少しバラす
-    const pad = 0.15;
-    zoneStart = norm(Math.random()*full + (Math.random()*pad - pad/2));
+  // ゾーン再配置（成功後：180〜220度先に新規生成）
+  function moveZoneAfterSuccess(successAngle){
+    const min = CONFIG.nextZoneMinDeg * Math.PI / 180;
+    const max = CONFIG.nextZoneMaxDeg * Math.PI / 180;
+    const offset = min + Math.random()*(max - min);
+    zoneStart = norm(successAngle + offset - zoneSize/2); // ゾーンは中心をoffset先にして開始角を計算
   }
 
-  // 入力（TAPした瞬間の時刻で判定）
+  // ランダム初期配置（開始時）
+  function randomizeZoneInitial(){
+    zoneStart = Math.random()*FULL;
+  }
+
+  // 入力（押した瞬間の角度で即時判定）
   function onTap(ev){
     if(!running || paused) return;
-    const now = ev?.timeStamp ? performance.now() : performance.now(); // 実装相性のため簡略（modern環境ならev.timeStampでもOK）
+    const now = performance.now(); // 各ブラウザ互換のため簡潔に
     if(now - lastInputAt < CONFIG.inputCooldownMs) return;
     lastInputAt = now;
 
     const a = sweepAngleAt(now);
-    // 成功判定は「固定針が12時＝0radにいるとき、スイープ中心がGood範囲内か」で見る
-    // Good/Greetはリング上の角度で定義済み
-    const s = zoneStart;
-    const e = norm(zoneStart + zoneSize);
-    const ok = inRange(a, s, e);
+    const ok = inRange(a, zoneStart, norm(zoneStart + zoneSize));
 
     if(ok){
-      // 見た目と内部を一致させる：ここを基準に取り直し
+      // 見た目と内部を一致させる：ここを基準に
       baseAngle = a; baseTime = now;
-      playSuccess();
+      if(!muted){ try{ successAudio.currentTime = 0; successAudio.play().catch(()=>{});}catch{} }
       streak++; elStreak.textContent = String(streak);
       rpm = Math.min(CONFIG.maxRPM, rpm + CONFIG.rpmIncrease);
-      randomizeZone();
+      moveZoneAfterSuccess(a);
       draw(now);
     }else{
       gameOver();
     }
   }
 
-  // サウンド
-  const playSuccess = () => { if(muted) return; try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch(_){} };
-
   // 制御
   function startGame(){
     resizeCanvas();
     running=true; paused=false; streak=0; elStreak.textContent='0';
     rpm = CONFIG.baseRPM; baseAngle=0; baseTime=performance.now();
-    randomizeZone();
+    randomizeZoneInitial();
     tapBtn.disabled=false;
     requestAnimationFrame(loop);
   }
@@ -264,21 +265,22 @@
     if(!running) return;
     paused = !paused;
     pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
-    // 再開直後ズレ防止
+    // 再開ズレ防止
     const now = performance.now();
     baseAngle = sweepAngleAt(now);
-    baseTime = now;
+    baseTime  = now;
     draw(now);
   }
   function stopGame(){ running=false; paused=false; tapBtn.disabled=true; }
+
   function gameOver(){
     stopGame();
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
-  // ランキング（名前無し：日付＋連続回数）
-  const KEY='skillcheck_top5_sweep_noname_v1';
+  // ランキング（名前なし）
+  const KEY='skillcheck_top5_redneedle_whitezone_v1';
   function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
   function saveScore(entry){
     if(entry.score<=0) return;
@@ -306,9 +308,8 @@
   closeRank.addEventListener('click', ()=>rankDlg.close(), {passive:true});
   resetRank.addEventListener('click', ()=>{ if(confirm('ランキングをリセットするで？')) resetRanking(); }, {passive:true});
 
-  // 入力：遅延の少ないpointerdown
+  // 入力
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
-  // スペースキーでも判定
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
   // 初期
