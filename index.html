@@ -171,17 +171,19 @@
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
 
     // 赤い針（直径より少し長い：前1.15R、後1.05R）
-    const front = rOuter * 1.15;
-    const back  = rOuter * 1.05;
-    ctx.save(); ctx.translate(CX, CY);
-    ctx.rotate(angle - Math.PI/2); // 見た目12時基準
-    ctx.beginPath();
-    ctx.moveTo(0,  back);     // 後ろ側（中心から下方向）
-    ctx.lineTo(0, -front);    // 前側（上方向、円の外へ）
-    ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444';
-    ctx.stroke();
-    ctx.restore();
-  }
+    // 赤い針（半径よりちょっと長めに）
+const front = rOuter * 1.2;   // 半径の1.2倍（少し外にはみ出す）
+const back  = rOuter * 0.2;   // 半径の20%だけ反対側に伸ばす
+
+ctx.save(); ctx.translate(CX, CY);
+ctx.rotate(angle - Math.PI/2);
+ctx.beginPath();
+ctx.moveTo(0,  back);   // 後ろ
+ctx.lineTo(0, -front);  // 前
+ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444';
+ctx.stroke();
+ctx.restore();
+}
 
   // ループ（カウントダウン時は描画のみ、プレイ時のみミス監視）
   function loop(now){
