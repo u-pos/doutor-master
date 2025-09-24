@@ -12,55 +12,64 @@
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   }
-  /* 上下余白さらに圧縮（上寄せ） */
+  /* 上下余白しっかり詰めた上寄せ */
   header.title{
     width:100%;display:flex;justify-content:center;align-items:center;
-    padding:8px 6px; margin:0;
-    background:linear-gradient(90deg,#0b1220,#0e1626);
-    border-bottom:1px solid #1f2b3a;
+    padding:8px 6px;margin:0;background:linear-gradient(90deg,#0b1220,#0e1626);border-bottom:1px solid #1f2b3a
   }
   header.title h1{
     margin:0;font-size:clamp(18px,4.3vw,24px);letter-spacing:.06em;font-weight:900;
     background:linear-gradient(180deg,#eaf2ff,#9bd5ff 60%,#79c3ff);
     -webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 2px 18px rgba(125,211,252,.15);
+    text-shadow:0 2px 18px rgba(125,211,252,.15)
   }
 
   .wrap{
-    min-height:calc(100dvh - 48px); /* headerぶんを引いた目安 */
+    min-height:calc(100dvh - 48px);
     display:flex;flex-direction:column;align-items:center;gap:4px;
     padding:4px 6px 2px;
   }
 
-  /* 盤面はJSで高さを制御（ここは比率だけ） */
+  /* 盤面（高さはJSで可変。正方形） */
   .board{width:100%;max-width:720px;position:relative}
   #cv{width:100%;height:100%;display:block;border-radius:12px;background:#0b0e13}
+
+  /* ミュート：円の左上あたりに固定 */
+  #muteBtn{
+    position:absolute;top:6px;left:6px;z-index:5;
+    width:44px;height:44px;font-size:22px;
+    border-radius:10px;border:1px solid #26303a;
+    background:#1f2937;color:#eaeef2;cursor:pointer;
+  }
 
   .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
     font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center;padding:8px}
   .overlay.show{display:flex}
-
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25);transform:translateY(9%)}
   .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;letter-spacing:.04em;
     background:linear-gradient(180deg,#fff,#a7f3d0 60%,#6ee7b7);-webkit-background-clip:text;background-clip:text;color:transparent;
     text-shadow:0 2px 20px rgba(110,231,183,.25)}
 
-  /* TAP＆ボタン群を限界まで上へ（円に近づける） */
-  .tap-row{width:100%;max-width:820px;margin-top:0;display:flex;justify-content:center}
+  /* TAPを少し上へ、下に少し余白 */
+  .tap-row{width:100%;max-width:820px;margin-top:-10px;display:flex;justify-content:center}
   #tapBtn{
-    width:min(92%,620px);height:92px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
-    font-weight:900;font-size:clamp(20px,6vw,30px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer
+    width:min(92%,620px);height:92px;border-radius:16px;border:2px solid #334155;
+    background:#0f131a;color:#e5e7eb;font-weight:900;
+    font-size:clamp(20px,6vw,30px);letter-spacing:1px;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer;
+    margin-bottom:10px; /* 下に少し余白 */
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
 
+  /* スタート＋ランキング（通常） */
   .bar{width:100%;max-width:820px;display:flex;justify-content:center;gap:8px;flex-wrap:nowrap;margin-top:0}
   .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent}
   #startBtn{background:linear-gradient(180deg,#34d399,#10b981);border-color:#065f46;color:#062e26;box-shadow:0 8px 22px rgba(16,185,129,.35);
     font-size:clamp(18px,5vw,22px);padding:12px 20px;letter-spacing:.04em}
-  .icon-btn{width:52px;height:52px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:24px;border-radius:12px}
 
-  #persecutionWrap{width:100%;max-width:820px;display:flex;justify-content:center;margin-top:0}
+  /* 迫害モード行：ボタン右にランキング（迫害） */
+  #persecutionWrap{width:100%;max-width:820px;display:flex;justify-content:center;margin-top:0;gap:8px}
   #persecutionBtn{display:none;background:linear-gradient(180deg,#f87171,#ef4444);border-color:#7f1d1d;color:#1b0a0a;
     box-shadow:0 8px 22px rgba(239,68,68,.35);font-size:clamp(16px,4.5vw,20px);padding:12px 20px;border-radius:12px}
 
@@ -83,32 +92,44 @@
   <div class="wrap">
     <div class="board" id="board">
       <canvas id="cv"></canvas>
+      <button id="muteBtn" class="btn icon-btn" aria-label="ミュート切替">🔊</button>
       <div id="welcome" class="welcome"><h2>目指せ 50連続！</h2></div>
       <div id="overlay" class="overlay"></div>
       <div id="celebrate" class="celebrate"></div>
     </div>
 
-    <div class="tap-row" id="tapRow"><button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button></div>
+    <div class="tap-row" id="tapRow"><button id="tapBtn" disabled>TAP</button></div>
 
+    <!-- スタート＋ランキング（通常） -->
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <button id="muteBtn"  class="btn icon-btn" aria-label="ミュート切替">🔊</button>
-      <button id="rankBtn"  class="btn icon-btn" aria-label="ランキング">🏆</button>
+      <button id="rankNormalBtn" class="btn">ランキング（通常）</button>
     </div>
-    <div id="persecutionWrap"><button id="persecutionBtn" class="btn">⚠ 迫害モード</button></div>
+
+    <!-- 迫害モード＋ランキング（迫害） -->
+    <div id="persecutionWrap">
+      <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
+      <button id="rankPerBtn" class="btn">ランキング（迫害）</button>
+    </div>
   </div>
 
+  <!-- ランキングダイアログ（共通） -->
   <dialog id="rankDlg">
-    <div class="dlg-head">🏆 オフライン TOP5</div>
+    <div class="dlg-head" id="rankTitle">🏆 自己ランキングTOP5（通常モード）</div>
     <div class="dlg-body">
-      <table class="rank-list" id="rankTable"><thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead><tbody></tbody></table>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button id="closeRank" class="btn">閉じる</button></div>
+      <table class="rank-list">
+        <thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead>
+        <tbody id="rankTbody"></tbody>
+      </table>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+        <button id="closeRank" class="btn">閉じる</button>
+      </div>
     </div>
   </dialog>
 
 <script>
 (() => {
-  // ===== 設定（動作は前の滑らか仕様のまま） =====
+  // ===== 設定（滑らか仕様のまま） =====
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
@@ -118,16 +139,17 @@
     TARGET_STREAK: 50,
     NORMAL_ZONE: 0.10,
     PERSECUTE_ZONE: 0.06,
-    HIT_EPSILON_DEG: 1.5
+    HIT_EPSILON_DEG: 1.5   // 微小越え許容（遅延吸収）
   };
 
   // ===== 要素 =====
   const $=(id)=>document.getElementById(id);
   const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
   const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), muteBtn=$('muteBtn'), rankBtn=$('rankBtn'), persecutionBtn=$('persecutionBtn');
-  const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
-  const closeRank=$('closeRank'), celebrateBox=$('celebrate');
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn'), rankPerBtn=$('rankPerBtn');
+  const rankNormalBtn=$('rankNormalBtn'), muteBtn=$('muteBtn');
+  const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
+  const celebrateBox=$('celebrate');
 
   // ===== 状態 =====
   let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false;
@@ -137,22 +159,23 @@
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
 
-  // ===== レイアウト：高さフィット =====
-  let cssW=0, cssH=0, dpr=1;
+  // ===== レイアウト：画面高にフィット（迫害ボタンも隠れない）=====
+  function visualH(){ return (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight; }
   function fitBoardToViewport(){
-    // 端末UI込みの実高さを優先
-    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+    const vh = visualH();
     const headH = hdr?.offsetHeight || 0;
     const tapH  = tapRow?.offsetHeight || 0;
     const barH  = btnBar?.offsetHeight || 0;
-    const perH  = (persecutionWrap?.offsetHeight || 0) * (persecutionBtn.style.display!=='none' ? 1 : 0);
-    const wrapPad = 12; // wrap padding/gapのバッファ
+    const perH  = (persecutionWrap?.offsetHeight || 0) * (perBtn.style.display!=='none' || rankPerBtn.style.display!=='none' ? 1 : 0);
+    const wrapPad = 12; // バッファ
     const reserve = headH + tapH + barH + perH + wrapPad;
-    // 横幅も考慮し、正方形として収まる最大サイズ
     const idealSide = Math.min(board.clientWidth || board.getBoundingClientRect().width || 320,
-                               Math.max(160, vh - reserve)); // 下に絶対はみ出さない
+                               Math.max(160, vh - reserve));
     board.style.height = idealSide + 'px';
   }
+
+  // Canvas実寸更新
+  let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
     fitBoardToViewport();
     const rect=cv.getBoundingClientRect();
@@ -172,7 +195,7 @@
   document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
   ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ===== サウンド：WebAudio事前デコード＋フォールバック（ノンブロッキング） =====
+  // ===== サウンド：WebAudio事前デコード＋HTMLAudioフォールバック（ノンブロッキング） =====
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let actx=null, gMaster=null;
   const buf = { success:null, bomb:null, ready:null, fanfare:null };
@@ -222,6 +245,7 @@
   window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
 
   // ===== 角度/描画 =====
+  const FULL=Math.PI*2;
   const norm=a=>(a%FULL+FULL)%FULL;
   const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
   const cwDelta=(from,to)=>(to-from+FULL)%FULL;
@@ -229,7 +253,7 @@
   const getCurrentAngle=(t)=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
-    const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.378; /* 円0.9倍 */
+    const w=cv.clientWidth||cssW, h=cv.clientHeight||cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.378; /* 円0.9倍 */
     const ZS=zoneSize();
     ctx.clearRect(0,0,w,h);
 
@@ -241,7 +265,7 @@
     ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
 
-    // 赤い針（短い方0、直線）
+    // 赤い針（直線・短い側0）
     const front=r*1.2;
     const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
     ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
@@ -285,7 +309,7 @@
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI); // ゾーン真反対
     lastInside=false; lastAngle=null;
-    resizeCanvas(); // 新しいゾーンに合わせて即フィット（高さ再算出）
+    resizeCanvas(); // ゾーン決定直後にフィット
   }
   function moveZoneAfterSuccess(successAngle){
     const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
@@ -306,7 +330,7 @@
     const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= HIT_EPS;
 
     if(ok){
-      playSE('success');  // ノンブロッキング
+      playSE('success'); // ノンブロッキング
       streak++;
       if(streak >= CONFIG.TARGET_STREAK){ celebrateAndUnlock(); return; }
       baseAngle=a; baseTime=now;
@@ -339,7 +363,9 @@
     requestAnimationFrame(tick);
   }
 
-  function startGame(){
+  function startGame(which){
+    mode = which;
+    currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
     welcome.style.display='none';
     playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
@@ -350,7 +376,7 @@
     playSE('bomb');
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
-    renderRanking();
+    renderRankingButtonsVisibility();
   }
 
   function stopGame(keepOverlay){
@@ -366,9 +392,8 @@
     overlay.classList.add('show');
     runConfetti(220, 3000);
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    showPersecutionButton(true);
+    renderRankingButtonsVisibility();
     saveScore({score:streak, at:Date.now()});
-    renderRanking();
   }
 
   function runConfetti(n=200, dur=2800){
@@ -387,46 +412,53 @@
     setTimeout(()=>{ celebrateBox.classList.remove('show'); celebrateBox.innerHTML=''; }, dur);
   }
 
-  // ===== ランキング =====
-  const KEY='skillcheck_top5_goal50_fit_vh_v1';
-  const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
-  function saveScore(e){ if(e.score<=0) return; const arr=loadScores(); arr.push(e); arr.sort((a,b)=> b.score-a.score || b.at-a.at); localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5))); }
-  function renderRanking(){
-    const arr=loadScores(); rankTbd.innerHTML='';
+  // ===== ランキング（通常／迫害 別）=====
+  const KEY_NORMAL='rank_normal_v1';
+  const KEY_PER   ='rank_per_v1';
+  function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
+  function saveScore(entry){
+    const key=(mode==='persecution')?KEY_PER:KEY_NORMAL;
+    if(entry.score<=0) return;
+    const arr=loadScores(key); arr.push(entry);
+    arr.sort((a,b)=> b.score-a.score || b.at-a.at);
+    localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
+  }
+  function openRanking(which){
+    const key=(which==='persecution')?KEY_PER:KEY_NORMAL;
+    const arr=loadScores(key);
+    rankTbody.innerHTML='';
     arr.forEach((e,i)=>{
-      const dt=new Date(e.at);
-      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
-      rankTbd.appendChild(tr);
+      const d=new Date(e.at); const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
+      rankTbody.appendChild(tr);
     });
+    rankTitle.textContent=(which==='persecution')?'🏆 自己ランキングTOP5（迫害モード）':'🏆 自己ランキングTOP5（通常モード）';
+    if(rankDlg?.showModal) rankDlg.showModal();
   }
 
-  // ===== UI：迫害モード =====
-  function showPersecutionButton(show){
-    persecutionBtn.style.display = show ? 'inline-block' : 'none';
-    // ボタンの有無で盤面サイズもフィットし直す
-    requestAnimationFrame(resizeCanvas);
-  }
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution') === '1'; }catch{ return false; } }
-  function activateMode(newMode){
-    mode = newMode; currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
-    overlay.textContent = (mode==='persecution') ? '迫害モード：激ムズ！' : '通常モード';
-    overlay.classList.add('show'); setTimeout(()=> overlay.classList.remove('show'), 900);
+  // 迫害モード解放状況でボタン表示を切替
+  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
+  function renderRankingButtonsVisibility(){
+    const unlocked=isUnlocked();
+    perBtn.style.display = unlocked ? 'inline-block' : 'none';
+    rankPerBtn.style.display = unlocked ? 'inline-block' : 'none';
+    requestAnimationFrame(resizeCanvas); // 高さ再フィット
   }
 
   // ===== イベント =====
-  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); activateMode('normal'); startGame(); }, {passive:false});
-  persecutionBtn.addEventListener('click', (e)=>{ e.preventDefault(); activateMode('persecution'); startGame(); }, {passive:false});
-  muteBtn .addEventListener('click', (e)=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
-  rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
-  closeRank?.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
-  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
+  perBtn   .addEventListener('click', (e)=>{ e.preventDefault(); startGame('persecution'); }, {passive:false});
+  tapBtn   .addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
+
+  muteBtn     .addEventListener('click', (e)=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
+  rankNormalBtn.addEventListener('click', (e)=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
+  rankPerBtn   .addEventListener('click', (e)=>{ e.preventDefault(); openRanking('persecution'); }, {passive:false});
+  closeRank    .addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close) rankDlg.close(); }, {passive:false});
 
   // 初期
   setMuted(false);
-  renderRanking();
-  showPersecutionButton(isUnlocked());
+  renderRankingButtonsVisibility();
 })();
 </script>
 </body>
