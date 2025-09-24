@@ -486,7 +486,7 @@
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
-  // ========= 初期 =========
+  // ========= 初期 ========
   setMuted(false);
   renderRanking();
   showPersecutionButton(isUnlocked());
