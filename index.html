@@ -12,10 +12,9 @@
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   }
-  /* 装飾タイトル */
   header.title{
     width:100%; display:flex; justify-content:center; align-items:center;
-    padding:14px 8px; margin:0 0 6px;
+    padding:14px 8px; margin:0;
     background:linear-gradient(90deg, #0b1220, #0e1626);
     border-bottom:1px solid #1f2b3a;
   }
@@ -27,7 +26,9 @@
   }
 
   .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
-  .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
+  .board{width:100%;max-width:720px;position:relative}
+  /* aspect-ratio 使えない環境でもJSで高さ調整するのでOK */
+  .board{aspect-ratio:1/1}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
     position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;
@@ -43,7 +44,7 @@
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
 
-  .bottombar{margin-top:6px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px}
+  .bottombar{margin-top:6px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
   .btn{
     border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
     font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent
@@ -51,7 +52,7 @@
   .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
   .btn.alt{background:#122031;border-color:#2a3f59}
 
-  dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:var(--fg)}
+  dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
   .dlg-head{padding:14px 16px;border-bottom:1px solid #253040;font-weight:700}
   .dlg-body{padding:12px 16px}
   .rank-list{width:100%;border-collapse:collapse}
@@ -63,7 +64,7 @@
   <header class="title"><h1>スキルチェックゲーム</h1></header>
 
   <div class="wrap">
-    <div class="board">
+    <div class="board" id="board">
       <canvas id="cv"></canvas>
       <div id="overlay" class="overlay"></div>
     </div>
@@ -95,249 +96,196 @@
 
 <script>
 (() => {
-  // ===== 設定 =====
+  // ====== 安全ガード ======
+  const $ = (id) => document.getElementById(id);
+  const board = $('board'), cv = $('cv'), ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), pauseBtn=$('pauseBtn'), rankBtn=$('rankBtn');
+  const overlay=$('overlay'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
+  const closeRank=$('closeRank'), resetRank=$('resetRank');
+
+  // ====== 設定 ======
   const CONFIG = {
-    RPM: 60,                 // 一定速度
-    ZONE_RATIO: 0.08,        // 白ゾーン角度幅（円周比）
-    INPUT_CD_MS: 45,         // 誤爆防止
-    NEXT_MIN_DEG: 180,       // 成功後：成功角 + [180°,220°] に次ゾーン中心
+    RPM: 60,
+    ZONE_RATIO: 0.08,          // 白ゾーン角度幅
+    INPUT_CD_MS: 45,
+    NEXT_MIN_DEG: 180,
     NEXT_MAX_DEG: 220,
-    COUNTDOWN_MS: 1500       // Ready→GO（針は止める）
+    COUNTDOWN_MS: 1500
   };
 
-  // ===== 要素 =====
-  const cv = document.getElementById('cv');
-  const ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
-  const tapBtn  = document.getElementById('tapBtn');
-  const startBtn= document.getElementById('startBtn');
-  const pauseBtn= document.getElementById('pauseBtn');
-  const rankBtn = document.getElementById('rankBtn');
-  const overlay = document.getElementById('overlay');
-  const rankDlg = document.getElementById('rankDlg');
-  const rankTbd = document.querySelector('#rankTable tbody');
-  const closeRank = document.getElementById('closeRank');
-  const resetRank = document.getElementById('resetRank');
+  // ====== 状態 ======
+  let phase='idle', paused=false, streak=0, lastInputAt=0, rafId=0;
+  const FULL = Math.PI*2, ZONE_SIZE = FULL*CONFIG.ZONE_RATIO;
+  let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
+  let lastAngle=null, lastInside=false;
 
-  // ===== 状態 =====
-  let phase = 'idle'; // idle | countdown | play
-  let paused = false;
-  let streak = 0;
-  let lastInputAt = 0;
-  let rafId = 0;
-
-  const FULL = Math.PI * 2;
-  const ZONE_SIZE = FULL * CONFIG.ZONE_RATIO;
-
-  // 回転は baseAngle@baseTime（0=右、反時計回り）
-  let baseAngle = 0;
-  let baseTime  = 0;
-  // カウントダウン中の固定角
-  let frozenAngle = 0;
-
-  // 白ゾーン
-  let zoneStart = 0; // 開始角
-  const zoneCenter = () => norm(zoneStart + ZONE_SIZE/2);
-
-  // 通過ミス監視
-  let lastAngle = null;
-  let lastInside = false;
-
-  // オフスクリーン（背景キャッシュ）
-  let bgCanvas = null, bgCtx = null;
-
-  // DPR & リサイズ
+  // ====== レイアウト（aspect-ratio非対応でも正方形維持） ======
   let cssW=0, cssH=0, dpr=1;
+  function ensureSquare(){
+    // aspect-ratio未対応でも高さを幅に合わせる
+    const bw = board.clientWidth || board.getBoundingClientRect().width || 300;
+    board.style.height = bw + 'px';
+  }
   function resizeCanvas(){
-    const rect = cv.getBoundingClientRect();
-    dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    cssW = rect.width; cssH = rect.height;
-    cv.width  = Math.round(cssW * dpr);
-    cv.height = Math.round(cssH * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    // 再生成：背景キャッシュ
-    bgCanvas = document.createElement('canvas');
-    bgCanvas.width  = cv.width;
-    bgCanvas.height = cv.height;
-    bgCtx = bgCanvas.getContext('2d', {alpha:false});
-    bgCtx.setTransform(dpr,0,0,dpr,0,0);
-    renderStaticBg(); // 背景と外枠を一度だけ描く
-    draw(getCurrentAngle(performance.now()));
+    try{
+      ensureSquare();
+      const rect = cv.getBoundingClientRect();
+      dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+      cssW = rect.width||300; cssH = rect.height||300;
+      cv.width  = Math.round(cssW * dpr);
+      cv.height = Math.round(cssH * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      draw(getCurrentAngle(performance.now()));
+    }catch(e){ console.error(e); }
   }
-  new ResizeObserver(resizeCanvas).observe(cv);
-
-  // 背景キャッシュ描画（重い円弧を毎フレーム描かない）
-  function renderStaticBg(){
-    const w = cssW, h = cssH;
-    const CX = w/2, CY = h/2;
-    const r  = Math.min(w,h)*0.42;
-
-    bgCtx.clearRect(0,0,w,h);
-
-    // 背景（板）
-    bgCtx.fillStyle = '#0b0e13';
-    bgCtx.fillRect(0,0,w,h);
-
-    // 外枠グレー（2px）
-    bgCtx.beginPath(); bgCtx.arc(CX, CY, r, 0, FULL);
-    bgCtx.lineWidth = 2; bgCtx.strokeStyle = '#1a2330'; bgCtx.stroke();
+  // 初期＆リサイズ
+  window.addEventListener('resize', resizeCanvas);
+  if (window.ResizeObserver) {
+    try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {}
   }
+  // 初回は必ず実行
+  requestAnimationFrame(resizeCanvas);
 
-  // オーディオ（事前デコード）
+  // ====== オーディオ ======
   const successAudio = new Audio('success.mp3');
   const bombAudio    = new Audio('bomb.mp3');
   [successAudio, bombAudio].forEach(a=>{ a.preload='auto'; a.volume=0.9; });
   const warm=a=>a.play().then(()=>{a.pause();a.currentTime=0;}).catch(()=>{});
   window.addEventListener('pointerdown', function unlock(){ warm(successAudio); warm(bombAudio); window.removeEventListener('pointerdown', unlock); }, {once:true});
 
-  // iOSのズーム抑止
+  // ====== iOSズーム抑止 ======
   document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
   ['gesturestart','gesturechange','gestureend'].forEach(ev=> window.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
 
-  // 角度ユーティリティ
+  // ====== 角度計算 ======
   const norm = a => (a % FULL + FULL) % FULL;
   const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
   const cwDelta = (from,to)=> (to - from + FULL) % FULL;
   const angleAt = (t) => {
-    const rps = CONFIG.RPM / 60;
+    const rps = CONFIG.RPM/60;
     const delta = (t - baseTime)/1000;
-    return norm(baseAngle + rps * FULL * delta);
+    return norm(baseAngle + rps*FULL*delta);
   };
   const getCurrentAngle = (t) => (phase==='play') ? angleAt(t) : frozenAngle;
 
-  // フレーム描画
+  // ====== 描画 ======
   function draw(angle){
-    const w = cssW, h = cssH;
-    const CX = w/2, CY = h/2;
-    const r  = Math.min(w,h)*0.42;
-
-    // 背景キャッシュを転送
+    const w=cssW, h=cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.42;
     ctx.clearRect(0,0,w,h);
-    if(bgCanvas) ctx.drawImage(bgCanvas, 0, 0, w, h);
 
-    // 白ゾーン（可変なので都度描画）
-    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
-    ctx.arc(CX, CY, r, zoneStart, zoneStart + ZONE_SIZE); ctx.stroke();
+    // 外枠2px
+    ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
+    ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 赤針（半径より少し長い：前1.2R／後0.2R）
-    const front = r * 1.2, back = r * 0.2;
-    const fx = CX + front * Math.cos(angle);
-    const fy = CY + front * Math.sin(angle);
-    const bx = CX - back  * Math.cos(angle);
-    const by = CY - back  * Math.sin(angle);
-    ctx.beginPath();
-    ctx.moveTo(bx, by); ctx.lineTo(fx, fy);
-    ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
+    // 白ゾーン
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
+    ctx.arc(CX, CY, r, zoneStart, zoneStart+ZONE_SIZE); ctx.stroke();
+
+    // 赤針（前1.2R／後0.2R）
+    const front=r*1.2, back=r*0.2;
+    const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
+    const bx=CX-back *Math.cos(angle), by=CY-back *Math.sin(angle);
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(fx,fy);
+    ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
   }
 
-  // ループ（play中のみ通過ミス監視）
+  // ====== ループ ======
   function loop(now){
-    const ang = getCurrentAngle(now);
-    draw(ang);
+    try{
+      const ang=getCurrentAngle(now);
+      draw(ang);
 
-    if(phase==='play' && !paused){
-      const zoneEnd = norm(zoneStart + ZONE_SIZE);
-      const inside = inRange(ang, zoneStart, zoneEnd);
-      if(lastAngle !== null){
-        if(lastInside && !inside){
-          const moved = cwDelta(lastAngle, ang);
-          const toEnd = cwDelta(lastAngle, zoneEnd);
-          if(moved >= toEnd){ return gameOver(); }
+      if(phase==='play' && !paused){
+        const zoneEnd=norm(zoneStart+ZONE_SIZE);
+        const inside=inRange(ang, zoneStart, zoneEnd);
+        if(lastAngle!==null && lastInside && !inside){
+          const moved=cwDelta(lastAngle, ang);
+          const toEnd=cwDelta(lastAngle, zoneEnd);
+          if(moved>=toEnd){ return gameOver(); }
         }
+        lastInside=inside; lastAngle=ang;
       }
-      lastInside = inside;
-      lastAngle  = ang;
-    }
-
-    rafId = requestAnimationFrame(loop);
+    }catch(e){ console.error(e); }
+    rafId=requestAnimationFrame(loop);
   }
 
-  // 初期配置：ゾーン中心ランダム→針はその真反対
+  // ====== ゲームロジック ======
   function setupInitial(){
-    const center = Math.random()*FULL;
-    zoneStart    = norm(center - ZONE_SIZE/2);
-    frozenAngle  = norm(center + Math.PI); // 真反対
-    lastInside = false; lastAngle = null;
+    const center=Math.random()*FULL;
+    zoneStart = norm(center - ZONE_SIZE/2);
+    frozenAngle = norm(center + Math.PI); // 真反対
+    lastInside=false; lastAngle=null;
   }
 
-  // 成功後：次ゾーン中心 = 成功角 + [180°,220°]
   function moveZoneAfterSuccess(successAngle){
-    const min = CONFIG.NEXT_MIN_DEG * Math.PI/180;
-    const max = CONFIG.NEXT_MAX_DEG * Math.PI/180;
-    const nextCenter = norm(successAngle + (min + Math.random()*(max-min)));
-    zoneStart = norm(nextCenter - ZONE_SIZE/2);
-    lastInside = false; lastAngle = null;
+    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
+    const nextCenter=norm(successAngle + (min + Math.random()*(max-min)));
+    zoneStart=norm(nextCenter - ZONE_SIZE/2);
+    lastInside=false; lastAngle=null;
   }
 
-  // 入力
   function onTap(){
     if(phase!=='play' || paused) return;
-    const now = performance.now();
-    if(now - lastInputAt < CONFIG.INPUT_CD_MS) return;
-    lastInputAt = now;
+    const now=performance.now();
+    if(now-lastInputAt<CONFIG.INPUT_CD_MS) return;
+    lastInputAt=now;
 
-    const a  = angleAt(now);
-    const ok = inRange(a, zoneStart, norm(zoneStart + ZONE_SIZE));
+    const a=angleAt(now);
+    const ok=inRange(a, zoneStart, norm(zoneStart+ZONE_SIZE));
     if(ok){
       try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
       streak++;
-      baseAngle = a; baseTime = now;    // 内部基準を同期
+      baseAngle=a; baseTime=now;
       moveZoneAfterSuccess(a);
-      draw(a);                          // 切替直後も即描画して体感ラグを減らす
+      draw(a); // 即描画で切替ラグ体感軽減
     }else{
       gameOver();
     }
   }
 
-  // カウントダウン（針は停止角、TAP無効）
   function showCountdown(){
     overlay.classList.add('show');
-    overlay.textContent = 'Ready';
-    tapBtn.disabled = true;
-    phase = 'countdown';
+    overlay.textContent='Ready';
+    tapBtn.disabled=true; phase='countdown';
+    const t0=performance.now(), mid=t0+CONFIG.COUNTDOWN_MS*0.6, end=t0+CONFIG.COUNTDOWN_MS;
 
-    const t0 = performance.now();
-    const mid = t0 + CONFIG.COUNTDOWN_MS * 0.6;
-    const end = t0 + CONFIG.COUNTDOWN_MS;
-
-    const tick = () => {
-      const now = performance.now();
-      if(now >= end){
+    const tick=()=>{
+      const now=performance.now();
+      if(now>=end){
         overlay.classList.remove('show');
-        baseAngle = frozenAngle;
-        baseTime  = now;
-        phase = 'play';
-        tapBtn.disabled = false;
-        const ang = angleAt(now);
-        lastAngle  = ang;
-        lastInside = inRange(ang, zoneStart, norm(zoneStart + ZONE_SIZE));
+        baseAngle=frozenAngle; baseTime=now;
+        phase='play'; tapBtn.disabled=false;
+        const ang=angleAt(now);
+        lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZONE_SIZE));
         return;
       }
-      if(now >= mid) overlay.textContent = 'GO!';
+      if(now>=mid) overlay.textContent='GO!';
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   }
 
-  // 制御
   function startGame(){
-    if(rafId) cancelAnimationFrame(rafId);
-    paused=false; streak=0;
-    setupInitial();
-    resizeCanvas();
-    showCountdown();
-    rafId = requestAnimationFrame(loop);
+    try{
+      if(rafId) cancelAnimationFrame(rafId);
+      paused=false; streak=0;
+      setupInitial();
+      resizeCanvas();               // ★必ず一度描画
+      showCountdown();
+      rafId=requestAnimationFrame(loop);
+    }catch(e){ console.error(e); }
   }
+
   function pauseGame(){
     if(phase!=='play') return;
-    paused = !paused;
+    paused=!paused;
     pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
     if(!paused){
-      const now = performance.now();
-      const a = angleAt(now);
-      baseAngle = a; baseTime = now;
-      draw(a);
+      const now=performance.now(), a=angleAt(now);
+      baseAngle=a; baseTime=now; draw(a);
     }
   }
+
   function gameOver(){
     try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
     phase='idle'; tapBtn.disabled=true;
@@ -346,8 +294,8 @@
     renderRanking();
   }
 
-  // ランキング（ローカルTOP5）
-  const KEY='skillcheck_top5_cachebg_v1';
+  // ====== ランキング ======
+  const KEY='skillcheck_top5_stable_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){
     if(e.score<=0) return;
@@ -356,7 +304,7 @@
     localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5)));
   }
   function renderRanking(){
-    const arr = loadScores(); rankTbd.innerHTML='';
+    const arr=loadScores(); rankTbd.innerHTML='';
     arr.forEach((e,i)=>{
       const dt=new Date(e.at);
       const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
@@ -365,4 +313,20 @@
       rankTbd.appendChild(tr);
     });
   }
-  function resetRanking(){ loca
+
+  // ====== イベント（全部“確実に”有効化） ======
+  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
+  pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
+  rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
+  closeRank.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
+  resetRank.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('ランキングをリセットしますか？')){ localStorage.removeItem(KEY); renderRanking(); } }, {passive:false});
+  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
+  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
+
+  // ====== 初期化（必ず最後に一回描画） ======
+  renderRanking();
+  requestAnimationFrame(resizeCanvas);
+})();
+</script>
+</body>
+</html>
