@@ -8,7 +8,7 @@
   :root{ --bg:#0f1115; --fg:#eaeef2; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;}
+    overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
   header.title{width:100%;display:flex;justify-content:center;align-items:center;
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
@@ -80,7 +80,7 @@
   const startBtn=document.getElementById('startBtn'),perBtn=document.getElementById('persecutionBtn');
   const rankNormalBtn=document.getElementById('rankNormalBtn'),rankPerBtn=document.getElementById('rankPerBtn');
   const muteBtn=document.getElementById('muteBtn');let isMuted=false;
-  let phase='idle',mode='normal',rafId;
+  let rafId,mode='normal',phase='idle';
 
   // 音
   const sounds={success:new Audio('success.mp3'),bomb:new Audio('bomb.mp3')};
@@ -90,21 +90,30 @@
   // 描画
   const FULL=Math.PI*2;let zoneStart=0,angle=0;
   function draw(){const w=cv.width=cv.clientWidth,h=cv.height=cv.clientHeight;ctx.clearRect(0,0,w,h);
-    const r=Math.min(w,h)*0.38;ctx.beginPath();ctx.arc(w/2,h/2,r,0,FULL);ctx.strokeStyle="#1a2330";ctx.lineWidth=2;ctx.stroke();
+    const r=Math.min(w,h)*0.42; // ←大きさ戻した
+    ctx.beginPath();ctx.arc(w/2,h/2,r,0,FULL);ctx.strokeStyle="#1a2330";ctx.lineWidth=2;ctx.stroke();
     ctx.beginPath();ctx.arc(w/2,h/2,r,zoneStart,zoneStart+FULL*0.1);ctx.strokeStyle="#fff";ctx.lineWidth=24;ctx.stroke();
-    ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(w/2+r*1.2*Math.cos(angle),h/2+r*1.2*Math.sin(angle));ctx.strokeStyle="#ef4444";ctx.lineWidth=6;ctx.stroke();}
+    ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(w/2+r*1.2*Math.cos(angle),h/2+r*1.2*Math.sin(angle));
+    ctx.strokeStyle="#ef4444";ctx.lineWidth=6;ctx.stroke();}
   function loop(){draw();rafId=requestAnimationFrame(loop);}
 
-  startBtn.onclick=()=>{mode='normal';phase='play';if(rafId)cancelAnimationFrame(rafId);loop();};
-  perBtn.onclick=()=>{mode='persecution';phase='play';if(rafId)cancelAnimationFrame(rafId);loop();};
+  // ゲーム開始
+  function startGame(m){mode=m;phase='play';if(rafId)cancelAnimationFrame(rafId);loop();}
+
+  startBtn.onclick=()=>startGame('normal');
+  perBtn.onclick=()=>startGame('persecution');
 
   rankNormalBtn.onclick=()=>openRank('normal');
   rankPerBtn.onclick=()=>openRank('persecution');
-  function openRank(which){document.getElementById('rankTitle').textContent=(which==='normal')?'🏆 自己ランキングTOP5（通常モード）':'🏆 自己ランキングTOP5（迫害モード）';document.getElementById('rankDlg').showModal();}
+  function openRank(which){
+    document.getElementById('rankTitle').textContent=(which==='normal')?'🏆 自己ランキングTOP5（通常モード）':'🏆 自己ランキングTOP5（迫害モード）';
+    document.getElementById('rankDlg').showModal();}
   document.getElementById('closeRank').onclick=()=>document.getElementById('rankDlg').close();
 
   // 初期表示
-  function renderBtns(){const unlocked=localStorage.getItem('skillcheck_unlock_persecution')==='1';perBtn.style.display=unlocked?'inline-block':'none';rankPerBtn.style.display=unlocked?'inline-block':'none';}
+  function renderBtns(){const unlocked=localStorage.getItem('skillcheck_unlock_persecution')==='1';
+    perBtn.style.display=unlocked?'inline-block':'none';
+    rankPerBtn.style.display=unlocked?'inline-block':'none';}
   renderBtns();draw();
 })();
 </script>
