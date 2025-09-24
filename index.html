@@ -87,7 +87,7 @@
       </table>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
         <button id="closeRank" class="btn">閉じる</button>
-        <button id="resetRank" class="btn warn">リセット</button>
+        <!-- リセットボタン削除済み -->
       </div>
     </div>
   </dialog>
@@ -97,7 +97,7 @@
   // ========= 設定 =========
   const CONFIG = {
     RPM: 60,                 // 一定速度
-    ZONE_RATIO: 0.18,        // ★白ゾーン角度幅（広げる/狭めるのはここ）
+    ZONE_RATIO: 0.14,        // ★白ゾーン角度幅（ここを調整して広げ/狭めできます）
     INPUT_CD_MS: 45,         // 誤爆防止
     NEXT_MIN_DEG: 180,       // 成功後：成功角 + [180°,220°] に次ゾーン中心
     NEXT_MAX_DEG: 220,
@@ -109,7 +109,7 @@
   const board = $('board'), cv = $('cv'), ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
   const tapBtn=$('tapBtn'), startBtn=$('startBtn'), pauseBtn=$('pauseBtn'), rankBtn=$('rankBtn');
   const overlay=$('overlay'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
-  const closeRank=$('closeRank'), resetRank=$('resetRank');
+  const closeRank=$('closeRank');
 
   // ========= 状態 =========
   let phase='idle', paused=false, streak=0, lastInputAt=0, rafId=0;
@@ -137,15 +137,24 @@
   if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
   requestAnimationFrame(resizeCanvas); // 初回必ず描画
 
-  // ========= Web Audio：ラグ対策（事前デコード再生） =========
+  // ========= Web Audio：事前デコード＋フォールバック =========
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let actx, bufSuccess=null, bufBomb=null;
+  let actx, bufSuccess=null, bufBomb=null, htmlSuccess, htmlBomb;
+
+  // HTMLAudio フォールバック（iOSの保険）
+  function setupHtmlAudio(){
+    htmlSuccess = new Audio('suc.mp3'); htmlSuccess.preload='auto'; htmlSuccess.playsInline = true;
+    htmlBomb    = new Audio('bomb.mp3');    htmlBomb.preload='auto';    htmlBomb.playsInline = true;
+    try{ htmlSuccess.volume=0.9; htmlBomb.volume=0.9; }catch{}
+  }
+  setupHtmlAudio();
+
   async function unlockAndWarmAudio() {
     try {
       if (!actx) actx = new AudioCtx({ latencyHint: 'interactive' });
       if (actx.state === 'suspended') await actx.resume();
       if (!bufSuccess) {
-        const res1 = await fetch('success.mp3'); const ab1 = await res1.arrayBuffer();
+        const res1 = await fetch('suc.mp3'); const ab1 = await res1.arrayBuffer();
         bufSuccess = await actx.decodeAudioData(ab1);
       }
       if (!bufBomb) {
@@ -157,17 +166,30 @@
     }
   }
   function playBuffer(buf, gain=0.9){
-    if (!actx || !buf) return;
-    const src = actx.createBufferSource();
-    const g   = actx.createGain();
-    g.gain.value = gain;
-    src.buffer = buf;
-    src.connect(g).connect(actx.destination);
-    src.start(actx.currentTime);
+    try{
+      if (!actx || !buf) return false;
+      const src = actx.createBufferSource();
+      const g   = actx.createGain();
+      g.gain.value = gain;
+      src.buffer = buf;
+      src.connect(g).connect(actx.destination);
+      src.start(actx.currentTime);
+      return true;
+    }catch(e){ console.warn('WebAudio play failed', e); return false; }
   }
-  function playSuccess(){ playBuffer(bufSuccess, 0.9); }
-  function playBomb(){ playBuffer(bufBomb, 0.9); }
-  // 初回ジェスチャで解放・事前デコード
+  async function playSuccess(){
+    if (!bufSuccess) { await unlockAndWarmAudio(); }
+    if (!playBuffer(bufSuccess, 0.9) && htmlSuccess){
+      try{ htmlSuccess.currentTime=0; await htmlSuccess.play(); }catch(e){}
+    }
+  }
+  async function playBomb(){
+    if (!bufBomb) { await unlockAndWarmAudio(); }
+    if (!playBuffer(bufBomb, 0.9) && htmlBomb){
+      try{ htmlBomb.currentTime=0; await htmlBomb.play(); }catch(e){}
+    }
+  }
+  // 初回ジェスチャで解放・事前デコード（スタートやTAPでOK）
   window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
 
   // ========= iOS のズーム抑止 =========
@@ -189,15 +211,15 @@
     const w=cssW, h=cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.42;
     ctx.clearRect(0,0,w,h);
 
-    // 外枠 2px（軽量）
+    // 外枠 2px
     ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
     ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 白ゾーン（太さ24px）
+    // 白ゾーン
     ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX, CY, r, zoneStart, zoneStart+ZONE_SIZE); ctx.stroke();
 
-    // 赤針（半径より少し長い：前1.2R／後0.2R）
+    // 赤針（前1.2R／後0.2R）
     const front=r*1.2, back=r*0.2;
     const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
     const bx=CX-back *Math.cos(angle), by=CY-back *Math.sin(angle);
@@ -238,7 +260,7 @@
     lastInside=false; lastAngle=null;
   }
 
-  function onTap(){
+  async function onTap(){
     if(phase!=='play' || paused) return;
     const now=performance.now();
     if(now-lastInputAt<CONFIG.INPUT_CD_MS) return;
@@ -247,7 +269,7 @@
     const a=angleAt(now);
     const ok=inRange(a, zoneStart, norm(zoneStart+ZONE_SIZE));
     if(ok){
-      playSuccess();                 // ★ Web Audio 再生（低ラグ）
+      await playSuccess();           // ★ 低ラグ再生（未ロードなら即フォールバック）
       streak++;
       baseAngle=a; baseTime=now;     // 内部基準を同期
       moveZoneAfterSuccess(a);
@@ -298,8 +320,8 @@
     }
   }
 
-  function gameOver(){
-    playBomb();                   // ★ Web Audio 再生（低ラグ）
+  async function gameOver(){
+    await playBomb();             // ★ 低ラグ再生（未ロードなら即フォールバック）
     phase='idle'; tapBtn.disabled=true;
     if(rafId) cancelAnimationFrame(rafId);
     saveScore({score:streak, at:Date.now()});
@@ -307,7 +329,7 @@
   }
 
   // ========= ランキング（ローカル TOP5） =========
-  const KEY='skillcheck_top5_webaudio_v1';
+  const KEY='skillcheck_top5_webaudio_v2';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){
     if(e.score<=0) return;
@@ -319,7 +341,7 @@
     const arr=loadScores(); rankTbd.innerHTML='';
     arr.forEach((e,i)=>{
       const dt=new Date(e.at);
-      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       const tr=document.createElement('tr');
       tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
       rankTbd.appendChild(tr);
@@ -331,7 +353,6 @@
   pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
   rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
   closeRank.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
-  resetRank.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('ランキングをリセットしますか？')){ localStorage.removeItem(KEY); renderRanking(); } }, {passive:false});
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
