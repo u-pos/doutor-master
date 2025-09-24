@@ -176,7 +176,36 @@
   const cwDelta=(f,t)=>(t-f+FULL)%FULL;
   const angleAt=t=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
   const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
+let explosionParticles = [];
 
+function triggerExplosion(cx, cy) {
+  explosionParticles = [];
+  for (let i = 0; i < 80; i++) {
+    explosionParticles.push({
+      x: cx, y: cy,
+      vx: (Math.random()-0.5)*6,
+      vy: (Math.random()-0.5)*6,
+      life: 30 + Math.random()*20,
+      color: (Math.random() < 0.5) ? "#ff4444" : "#ffaa33"
+    });
+  }
+}
+
+// ループ内で描画
+function drawExplosion(ctx) {
+  explosionParticles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life/50;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.1; // 重力風
+    p.life--;
+  });
+  ctx.globalAlpha = 1;
+  explosionParticles = explosionParticles.filter(p => p.life > 0);
+}
   function draw(angle){
     const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.42;  /* ← 元の大きさ */
     const ZS=zoneSize();
