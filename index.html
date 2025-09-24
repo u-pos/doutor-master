@@ -12,41 +12,65 @@
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   }
-  header.title{width:100%;display:flex;justify-content:center;align-items:center;padding:14px 8px;margin:0;
-    background:linear-gradient(90deg,#0b1220,#0e1626);border-bottom:1px solid #1f2b3a}
-  header.title h1{margin:0;font-size:clamp(20px,5vw,28px);letter-spacing:.06em;font-weight:900;
-    background:linear-gradient(180deg,#eaf2ff,#9bd5ff 60%,#79c3ff);-webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 2px 18px rgba(125,211,252,.15)}
-  .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
-  .board{width:100%;max-width:720px;position:relative;aspect-ratio:1/1}
-  #cv{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
+  /* 上下余白さらに圧縮（上寄せ） */
+  header.title{
+    width:100%;display:flex;justify-content:center;align-items:center;
+    padding:8px 6px; margin:0;
+    background:linear-gradient(90deg,#0b1220,#0e1626);
+    border-bottom:1px solid #1f2b3a;
+  }
+  header.title h1{
+    margin:0;font-size:clamp(18px,4.3vw,24px);letter-spacing:.06em;font-weight:900;
+    background:linear-gradient(180deg,#eaf2ff,#9bd5ff 60%,#79c3ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 18px rgba(125,211,252,.15);
+  }
+
+  .wrap{
+    min-height:calc(100dvh - 48px); /* headerぶんを引いた目安 */
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:4px 6px 2px;
+  }
+
+  /* 盤面はJSで高さを制御（ここは比率だけ） */
+  .board{width:100%;max-width:720px;position:relative}
+  #cv{width:100%;height:100%;display:block;border-radius:12px;background:#0b0e13}
+
   .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
-    font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center;padding:12px}
+    font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center;padding:8px}
   .overlay.show{display:flex}
-  .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;z-index:2;
-    text-align:center;background:rgba(0,0,0,.25);transform:translateY(10%)}
-  .welcome h2{margin:0;font-size:clamp(24px,7vw,44px);font-weight:900;letter-spacing:.04em;
+
+  .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
+    text-align:center;background:rgba(0,0,0,.25);transform:translateY(9%)}
+  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;letter-spacing:.04em;
     background:linear-gradient(180deg,#fff,#a7f3d0 60%,#6ee7b7);-webkit-background-clip:text;background-clip:text;color:transparent;
     text-shadow:0 2px 20px rgba(110,231,183,.25)}
-  /* TAPとボタン群をさらに上へ（円に近づける） */
+
+  /* TAP＆ボタン群を限界まで上へ（円に近づける） */
   .tap-row{width:100%;max-width:820px;margin-top:0;display:flex;justify-content:center}
-  #tapBtn{width:min(92%,620px);height:92px;border-radius:18px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
-    font-weight:900;font-size:clamp(20px,6vw,30px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer}
+  #tapBtn{
+    width:min(92%,620px);height:92px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
+    font-weight:900;font-size:clamp(20px,6vw,30px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer
+  }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
+
   .bar{width:100%;max-width:820px;display:flex;justify-content:center;gap:8px;flex-wrap:nowrap;margin-top:0}
-  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:14px;padding:12px 18px;font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  #startBtn{background:linear-gradient(180deg,#34d399,#10b981);border-color:#065f46;color:#062e26;box-shadow:0 10px 28px rgba(16,185,129,.35);
-    font-size:clamp(18px,5vw,22px);padding:14px 24px;letter-spacing:.04em}
-  .icon-btn{width:56px;height:56px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:26px;border-radius:14px}
+  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #startBtn{background:linear-gradient(180deg,#34d399,#10b981);border-color:#065f46;color:#062e26;box-shadow:0 8px 22px rgba(16,185,129,.35);
+    font-size:clamp(18px,5vw,22px);padding:12px 20px;letter-spacing:.04em}
+  .icon-btn{width:52px;height:52px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:24px;border-radius:12px}
+
   #persecutionWrap{width:100%;max-width:820px;display:flex;justify-content:center;margin-top:0}
   #persecutionBtn{display:none;background:linear-gradient(180deg,#f87171,#ef4444);border-color:#7f1d1d;color:#1b0a0a;
-    box-shadow:0 10px 28px rgba(239,68,68,.35);font-size:clamp(16px,4.5vw,20px);padding:12px 22px;border-radius:14px}
-  dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
-  .dlg-head{padding:14px 16px;border-bottom:1px solid #253040;font-weight:700}
-  .dlg-body{padding:12px 16px}
+    box-shadow:0 8px 22px rgba(239,68,68,.35);font-size:clamp(16px,4.5vw,20px);padding:12px 20px;border-radius:12px}
+
+  dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
+  .dlg-head{padding:12px 14px;border-bottom:1px solid #253040;font-weight:700}
+  .dlg-body{padding:10px 14px}
   .rank-list{width:100%;border-collapse:collapse}
   .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
   .rank-list th{color:#aab4bf;font-weight:600}
+
   .celebrate{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4;display:none}
   .celebrate.show{display:block}
   .con{position:absolute;width:8px;height:14px;opacity:.9;border-radius:2px;animation:fall linear forwards}
@@ -54,7 +78,7 @@
 </style>
 </head>
 <body>
-  <header class="title"><h1>スキルチェックゲーム</h1></header>
+  <header class="title" id="hdr"><h1>スキルチェックゲーム</h1></header>
 
   <div class="wrap">
     <div class="board" id="board">
@@ -64,9 +88,9 @@
       <div id="celebrate" class="celebrate"></div>
     </div>
 
-    <div class="tap-row"><button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button></div>
+    <div class="tap-row" id="tapRow"><button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button></div>
 
-    <div class="bar">
+    <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
       <button id="muteBtn"  class="btn icon-btn" aria-label="ミュート切替">🔊</button>
       <button id="rankBtn"  class="btn icon-btn" aria-label="ランキング">🏆</button>
@@ -78,13 +102,13 @@
     <div class="dlg-head">🏆 オフライン TOP5</div>
     <div class="dlg-body">
       <table class="rank-list" id="rankTable"><thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead><tbody></tbody></table>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button id="closeRank" class="btn">閉じる</button></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button id="closeRank" class="btn">閉じる</button></div>
     </div>
   </dialog>
 
 <script>
 (() => {
-  // ===== 設定 =====
+  // ===== 設定（動作は前の滑らか仕様のまま） =====
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
@@ -94,12 +118,13 @@
     TARGET_STREAK: 50,
     NORMAL_ZONE: 0.10,
     PERSECUTE_ZONE: 0.06,
-    HIT_EPSILON_DEG: 1.5   // 終端の微少越え許容（遅延吸収）
+    HIT_EPSILON_DEG: 1.5
   };
 
   // ===== 要素 =====
   const $=(id)=>document.getElementById(id);
-  const board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
+  const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
+  const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
   const tapBtn=$('tapBtn'), startBtn=$('startBtn'), muteBtn=$('muteBtn'), rankBtn=$('rankBtn'), persecutionBtn=$('persecutionBtn');
   const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
   const closeRank=$('closeRank'), celebrateBox=$('celebrate');
@@ -112,40 +137,99 @@
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
 
-  // ===== レイアウト =====
+  // ===== レイアウト：高さフィット =====
   let cssW=0, cssH=0, dpr=1;
-  function ensureSquare(){ const bw=board.clientWidth||board.getBoundingClientRect().width||300; board.style.height=bw+'px'; }
+  function fitBoardToViewport(){
+    // 端末UI込みの実高さを優先
+    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+    const headH = hdr?.offsetHeight || 0;
+    const tapH  = tapRow?.offsetHeight || 0;
+    const barH  = btnBar?.offsetHeight || 0;
+    const perH  = (persecutionWrap?.offsetHeight || 0) * (persecutionBtn.style.display!=='none' ? 1 : 0);
+    const wrapPad = 12; // wrap padding/gapのバッファ
+    const reserve = headH + tapH + barH + perH + wrapPad;
+    // 横幅も考慮し、正方形として収まる最大サイズ
+    const idealSide = Math.min(board.clientWidth || board.getBoundingClientRect().width || 320,
+                               Math.max(160, vh - reserve)); // 下に絶対はみ出さない
+    board.style.height = idealSide + 'px';
+  }
   function resizeCanvas(){
-    ensureSquare();
-    const rect=cv.getBoundingClientRect(); dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+    fitBoardToViewport();
+    const rect=cv.getBoundingClientRect();
+    dpr=Math.max(1, Math.min(3, window.devicePixelRatio||1));
     cssW=rect.width||300; cssH=rect.height||300;
-    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
     draw(getCurrentAngle(performance.now()));
   }
   window.addEventListener('resize', resizeCanvas);
-  if(window.ResizeObserver){ try{ new ResizeObserver(()=>resizeCanvas()).observe(board);}catch{} }
+  window.addEventListener('orientationchange', resizeCanvas);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
+  if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
   requestAnimationFrame(resizeCanvas);
 
   // ===== スクロール/ジェスチャ抑止 =====
   document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
   ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ===== サウンド（HTMLAudioフォールバック中心） =====
-  const html={};
+  // ===== サウンド：WebAudio事前デコード＋フォールバック（ノンブロッキング） =====
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let actx=null, gMaster=null;
+  const buf = { success:null, bomb:null, ready:null, fanfare:null };
+  const html = {};
   ['success','bomb','ready','fanfare'].forEach(k=>{ const a=new Audio(`${k}.mp3`); a.preload='auto'; a.playsInline=true; html[k]=a; });
-  function setMuted(m){ isMuted=m; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
-  async function playSE(k){ if(isMuted) return; try{ html[k].currentTime=0; await html[k].play(); }catch{} }
+
+  async function unlockAndWarmAudio() {
+    try {
+      if (!actx) {
+        actx = new AudioCtx({ latencyHint:'interactive' });
+        gMaster = actx.createGain(); gMaster.gain.value = isMuted ? 0 : 1;
+        gMaster.connect(actx.destination);
+      }
+      if (actx.state === 'suspended') await actx.resume();
+      await Promise.all(Object.keys(buf).map(async k=>{
+        if (buf[k]) return;
+        const res = await fetch(`${k}.mp3`);
+        const ab  = await res.arrayBuffer();
+        buf[k] = await actx.decodeAudioData(ab);
+      }));
+    } catch(e) { /* フォールバックで鳴らす */ }
+  }
+  function setMuted(m){
+    isMuted = m;
+    if (gMaster) gMaster.gain.value = isMuted ? 0 : 1;
+    Object.values(html).forEach(a=>{ a.muted = isMuted; });
+    muteBtn.textContent = isMuted ? '🔇' : '🔊';
+  }
+  function playBuf(key, gain=0.95){
+    try{
+      if (!actx || !buf[key]) return false;
+      const src = actx.createBufferSource();
+      const g = actx.createGain(); g.gain.value = gain;
+      src.buffer = buf[key];
+      src.connect(g).connect(gMaster || actx.destination);
+      src.start(actx.currentTime);
+      return true;
+    }catch{ return false; }
+  }
+  function playSE(key){
+    if (isMuted) return;
+    if (playBuf(key)) return;
+    unlockAndWarmAudio();
+    const tag = html[key];
+    if (tag){ try{ tag.currentTime=0; tag.play(); }catch{} }
+  }
+  window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
 
   // ===== 角度/描画 =====
   const norm=a=>(a%FULL+FULL)%FULL;
   const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
   const cwDelta=(from,to)=>(to-from+FULL)%FULL;
-  const angleAt=(t)=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle+rps*FULL*d); };
+  const angleAt=(t)=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
   const getCurrentAngle=(t)=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
-    const w=cssW,h=cssH,CX=w/2,CY=h/2;
-    const r=Math.min(w,h)*0.378;   // 0.9倍（元の0.42→0.378）
+    const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.378; /* 円0.9倍 */
     const ZS=zoneSize();
     ctx.clearRect(0,0,w,h);
 
@@ -157,13 +241,13 @@
     ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
 
-    // 赤い針（短い方0、直線のみ）
+    // 赤い針（短い方0、直線）
     const front=r*1.2;
     const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
     ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
     ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
 
-    // コンボ数字（中心より少し上）
+    // コンボ（中心より少し上）
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
@@ -182,14 +266,14 @@
       const inside=inRange(ang, zoneStart, end);
       if(lastAngle!==null && lastInside && !inside){
         const moved=cwDelta(lastAngle, ang), toEnd=cwDelta(lastAngle, end);
-        if(moved>=toEnd){ return gameOver(); } // ゾーン通過し切り
+        if(moved>=toEnd){ return gameOver(); } // ゾーン通過し切りでミス
       }
       lastInside=inside; lastAngle=ang;
     }
     rafId=requestAnimationFrame(loop);
   }
 
-  // ===== 判定の時刻補正（前の仕様） =====
+  // ===== タップ時刻（e.timeStamp）＋微小許容：滑らか仕様 =====
   function tapTimestamp(e){
     const ts=(e && typeof e.timeStamp==='number') ? e.timeStamp : performance.now();
     return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
@@ -198,18 +282,20 @@
   // ===== ロジック =====
   function setupInitial(){
     const center=Math.random()*FULL, ZS=zoneSize();
-    zoneStart=norm(center - ZS/2);           // 白ゾーン
-    frozenAngle=norm(center + Math.PI);      // 針はゾーン中心の反対側
+    zoneStart = norm(center - ZS/2);
+    frozenAngle = norm(center + Math.PI); // ゾーン真反対
     lastInside=false; lastAngle=null;
+    resizeCanvas(); // 新しいゾーンに合わせて即フィット（高さ再算出）
   }
   function moveZoneAfterSuccess(successAngle){
     const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
     const nextCenter=norm(successAngle + (min + Math.random()*(max-min)));
-    const ZS=zoneSize(); zoneStart=norm(nextCenter - ZS/2);
+    const ZS=zoneSize();
+    zoneStart=norm(nextCenter - ZS/2);
     lastInside=false; lastAngle=null;
   }
 
-  async function onTap(e){
+  function onTap(e){
     if(phase!=='play') return;
     const now=tapTimestamp(e);
     if(now - lastInputAt < CONFIG.INPUT_CD_MS) return;
@@ -220,9 +306,9 @@
     const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= HIT_EPS;
 
     if(ok){
-      await playSE('success');
+      playSE('success');  // ノンブロッキング
       streak++;
-      if(streak >= CONFIG.TARGET_STREAK){ return celebrateAndUnlock(); }
+      if(streak >= CONFIG.TARGET_STREAK){ celebrateAndUnlock(); return; }
       baseAngle=a; baseTime=now;
       moveZoneAfterSuccess(a);
       draw(a);
@@ -253,19 +339,15 @@
     requestAnimationFrame(tick);
   }
 
-  async function startGame(){
+  function startGame(){
     welcome.style.display='none';
-    await playSE('ready');
+    playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
-    streak=0;
-    setupInitial();
-    resizeCanvas();
-    showCountdown();
-    rafId=requestAnimationFrame(loop);
+    streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
   }
 
-  async function gameOver(){
-    await playSE('bomb');
+  function gameOver(){
+    playSE('bomb');
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
     renderRanking();
@@ -277,9 +359,9 @@
     if(!keepOverlay) overlay.classList.remove('show');
   }
 
-  async function celebrateAndUnlock(){
+  function celebrateAndUnlock(){
     stopGame(true);
-    await playSE('fanfare');
+    playSE('fanfare');
     overlay.innerHTML='おめでとう！50回達成だよ 🎉<br>迫害モード解放！';
     overlay.classList.add('show');
     runConfetti(220, 3000);
@@ -290,8 +372,7 @@
   }
 
   function runConfetti(n=200, dur=2800){
-    celebrateBox.innerHTML='';
-    celebrateBox.classList.add('show');
+    celebrateBox.innerHTML=''; celebrateBox.classList.add('show');
     const colors=['#60a5fa','#f472b6','#34d399','#fbbf24','#c084fc','#fca5a5','#4ade80'];
     const w=celebrateBox.clientWidth||window.innerWidth;
     for(let i=0;i<n;i++){
@@ -307,7 +388,7 @@
   }
 
   // ===== ランキング =====
-  const KEY='skillcheck_top5_goal50_layout_eps_final';
+  const KEY='skillcheck_top5_goal50_fit_vh_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){ if(e.score<=0) return; const arr=loadScores(); arr.push(e); arr.sort((a,b)=> b.score-a.score || b.at-a.at); localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5))); }
   function renderRanking(){
@@ -315,21 +396,22 @@
     arr.forEach((e,i)=>{
       const dt=new Date(e.at);
       const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
       rankTbd.appendChild(tr);
     });
   }
 
   // ===== UI：迫害モード =====
-  function showPersecutionButton(show){ persecutionBtn.style.display = show ? 'inline-block' : 'none'; }
+  function showPersecutionButton(show){
+    persecutionBtn.style.display = show ? 'inline-block' : 'none';
+    // ボタンの有無で盤面サイズもフィットし直す
+    requestAnimationFrame(resizeCanvas);
+  }
   function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution') === '1'; }catch{ return false; } }
   function activateMode(newMode){
-    mode = newMode;
-    currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
+    mode = newMode; currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
     overlay.textContent = (mode==='persecution') ? '迫害モード：激ムズ！' : '通常モード';
-    overlay.classList.add('show');
-    setTimeout(()=> overlay.classList.remove('show'), 900);
+    overlay.classList.add('show'); setTimeout(()=> overlay.classList.remove('show'), 900);
   }
 
   // ===== イベント =====
