@@ -316,7 +316,7 @@
   }
   function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
 
-  // ===== イベント（全部有効化） =====
+  // ===== イベント（全部有効化） ====
   startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
   pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
   rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); rankDlg.showModal(); }, {passive:false});
