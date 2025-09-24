@@ -286,6 +286,8 @@
   }
 
   function gameOver(){
+    phase = 'explosion';
+    triggerExplosion(cssW/2, cssH/2);
     playSE('bomb');
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
