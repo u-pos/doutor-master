@@ -2,11 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>DBDスキルチェック：怒涛の嵐（修正版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>DBDスキルチェック：怒涛の嵐（フルリビルド版）</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+  html,body{
+    margin:0;height:100%;
+    background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   }
@@ -14,11 +16,11 @@
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;
     font-weight:900;font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);
-    z-index:2
   }
   .overlay.show{display:flex}
+
   .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
@@ -28,8 +30,10 @@
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
 
   .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px}
-  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
-    font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .btn{
+    border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
+    font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent
+  }
   .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
   .btn.alt{background:#122031;border-color:#2a3f59}
 
@@ -56,7 +60,7 @@
     <div class="bottombar">
       <button id="startBtn" class="btn">▶ スタート</button>
       <button id="pauseBtn" class="btn warn">⏸ 一時停止</button>
-      <button id="rankBtn" class="btn alt">🏆 ランキング</button>
+      <button id="rankBtn"  class="btn alt">🏆 ランキング</button>
     </div>
 
     <div class="hint">成功: <code>success.mp3</code>／失敗: <code>bomb.mp3</code></div>
@@ -80,21 +84,21 @@
 (() => {
   // ===== 設定 =====
   const CONFIG = {
-    baseRPM: 60,            // 固定速度
-    zoneArcRatio: 0.08,     // 白ゾーン角度幅（従来の半分）
-    inputCooldownMs: 45,
-    nextZoneMinDeg: 180,    // 成功後は成功角＋[180°,220°]に次ゾーン中心
-    nextZoneMaxDeg: 220,
-    countdownMs: 1500       // Ready→GO 1.5s（停止中）
+    RPM: 60,                // 常に一定
+    ZONE_RATIO: 0.08,       // 白ゾーン角度幅（円周比）
+    INPUT_CD_MS: 45,        // 誤爆防止
+    NEXT_MIN_DEG: 180,      // 成功後：成功角 + [180°,220°] に次ゾーン中心
+    NEXT_MAX_DEG: 220,
+    COUNTDOWN_MS: 1500      // Ready→GO の合計時間
   };
 
   // ===== 要素 =====
   const cv = document.getElementById('cv');
-  const ctx = cv.getContext('2d', { alpha:false, desynchronized:true });
-  const startBtn= document.getElementById('startBtn');
-  const pauseBtn= document.getElementById('pauseBtn');
+  const ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
+  const tapBtn = document.getElementById('tapBtn');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
   const rankBtn = document.getElementById('rankBtn');
-  const tapBtn  = document.getElementById('tapBtn');
   const overlay = document.getElementById('overlay');
   const rankDlg = document.getElementById('rankDlg');
   const rankTbd = document.querySelector('#rankTable tbody');
@@ -102,176 +106,192 @@
   const resetRank = document.getElementById('resetRank');
 
   // ===== 状態 =====
-  let running=false, paused=false;
-  let phase='idle'; // idle | countdown | play
-  let lastInputAt=0;
-  let streak=0;
+  let phase = 'idle'; // idle | countdown | play
+  let paused = false;
+  let streak = 0;
+  let lastInputAt = 0;
+  let rafId = 0;
 
-  // 幾何
-  const FULL = Math.PI*2;
-  const zoneSize = FULL * CONFIG.zoneArcRatio;
-  const rpm = CONFIG.baseRPM;
+  const FULL = Math.PI * 2;
+  const ZONE_SIZE = FULL * CONFIG.ZONE_RATIO;
 
-  // 角度
-  let baseAngle=0, baseTime=0; // play用
-  let frozenAngle=0;           // countdown中の固定角
-  let zoneStart=0;             // 白ゾーン開始角
-  let lastAngle=null, lastInside=false; // 通過ミス監視
+  // 針の回転は baseAngle@baseTime から算出（play中のみ使用）
+  let baseAngle = 0; // rad
+  let baseTime  = 0; // performance.now()
+  // カウントダウン中の固定角
+  let frozenAngle = 0;
 
-  // DPR対応
+  // 白ゾーン開始角
+  let zoneStart = 0;
+
+  // 通過ミス監視
+  let lastAngle = null;
+  let lastInside = false;
+
+  // DPR & リサイズ
   let cssW=0, cssH=0, dpr=1;
-  function resizeCanvas(){
+  const resizeCanvas = () => {
     const rect = cv.getBoundingClientRect();
     dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
     cssW = rect.width; cssH = rect.height;
     cv.width  = Math.round(cssW * dpr);
     cv.height = Math.round(cssH * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw(performance.now(), getCurrentAngle(performance.now()));
-  }
+    draw(getCurrentAngle(performance.now()));
+  };
   new ResizeObserver(resizeCanvas).observe(cv);
 
-  // オーディオ
+  // オーディオ（事前デコード）
   const successAudio = new Audio('success.mp3');
   const bombAudio    = new Audio('bomb.mp3');
   [successAudio, bombAudio].forEach(a=>{ a.preload='auto'; a.volume=0.9; });
-  // iOS double-tap/gesture 対策
-  ['gesturestart','gesturechange','gestureend'].forEach(ev=>{
-    window.addEventListener(ev, e=>{ e.preventDefault(); }, {passive:false});
-  });
+  const warm = a => a.play().then(()=>{a.pause();a.currentTime=0;}).catch(()=>{});
+  window.addEventListener('pointerdown', function unlock(){ warm(successAudio); warm(bombAudio); window.removeEventListener('pointerdown', unlock); }, {once:true});
 
-  // 角度ユーティリティ
+  // iOSのズーム抑止（ダブルタップ/ピンチ）
+  document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(ev=> window.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
+
+  // 角度関数
   const norm = a => (a % FULL + FULL) % FULL;
-  function angleAt(t){
-    const rps = rpm / 60;
-    const delta = (t - baseTime)/1000;
+  const inRange = (a,s,e) => (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
+  const cwDelta = (from,to) => (to - from + FULL) % FULL;
+  const angleAt = (t) => {
+    const rps = CONFIG.RPM / 60;
+    const delta = (t - baseTime) / 1000;
     return norm(baseAngle + rps * FULL * delta);
-  }
-  function getCurrentAngle(t){ return (phase==='play') ? angleAt(t) : frozenAngle; }
-  const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
-  const cwDelta = (from,to)=> (to - from + FULL) % FULL;
+  };
+  const getCurrentAngle = (t) => (phase === 'play') ? angleAt(t) : frozenAngle;
 
   // 描画
-  function draw(now, angle){
+  function draw(angle){
     const w = cssW, h = cssH;
-    const CX=w/2, CY=h/2;
-    const rOuter = Math.min(w,h)*0.42;
+    const CX = w/2, CY = h/2;
+    const r = Math.min(w,h)*0.42;
 
     ctx.clearRect(0,0,w,h);
 
-    // 外枠（2px）
-    ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
-    ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
+    // 外枠グレー（2px）
+    ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
+    ctx.lineWidth = 2; ctx.strokeStyle = '#1a2330'; ctx.stroke();
 
-    // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
-    ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
+    // 白ゾーン（太さは見やすい 24px のまま）
+    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
+    ctx.arc(CX, CY, r, zoneStart, zoneStart + ZONE_SIZE); ctx.stroke();
 
-    // 赤針（半径より少し長め：前1.2R／後0.2R）
-    const front = rOuter * 1.2;
-    const back  = rOuter * 0.2;
+    // 赤針：半径より少し長め（前:1.2R、後:0.2R）
+    const front = r * 1.2, back = r * 0.2;
     ctx.save(); ctx.translate(CX, CY);
     ctx.rotate(angle - Math.PI/2);
-    ctx.beginPath();
-    ctx.moveTo(0, back);
-    ctx.lineTo(0, -front);
-    ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, back); ctx.lineTo(0, -front);
+    ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
     ctx.restore();
   }
 
-  // ループ（playのみ通過ミス監視）
+  // ループ（play中のみ通過ミス監視）
   function loop(now){
-    if(!running) return;
     const ang = getCurrentAngle(now);
-    draw(now, ang);
+    draw(ang);
 
     if(phase==='play' && !paused){
-      const zoneEnd = norm(zoneStart + zoneSize);
+      const zoneEnd = norm(zoneStart + ZONE_SIZE);
       const inside = inRange(ang, zoneStart, zoneEnd);
-
       if(lastAngle !== null){
         if(lastInside && !inside){
-          const moved   = cwDelta(lastAngle, ang);
-          const toEnd   = cwDelta(lastAngle, zoneEnd);
-          if(moved >= toEnd){ return gameOver(); } // ゾーン通過し切り → ミス
+          // 前フレームは内、今外 → endを越えて出たか？
+          const moved = cwDelta(lastAngle, ang);
+          const toEnd = cwDelta(lastAngle, zoneEnd);
+          if(moved >= toEnd){ return gameOver(); }
         }
       }
-      lastAngle = ang;
       lastInside = inside;
+      lastAngle  = ang;
     }
-    requestAnimationFrame(loop);
+
+    rafId = requestAnimationFrame(loop);
   }
 
-  // 針＝ゾーン中心の真反対で停止させてカウントダウン
-  function setupInitialZoneAndNeedle(){
-    const zoneCenter = Math.random()*FULL;
-    zoneStart   = norm(zoneCenter - zoneSize/2);
-    frozenAngle = norm(zoneCenter + Math.PI); // ★長い先端がゾーンの反対側
-    lastInside=false; lastAngle=null;
+  // 初期ゾーン＆針（針＝ゾーン中心の真反対）
+  function setupInitial(){
+    const zoneCenter = Math.random() * FULL;
+    zoneStart   = norm(zoneCenter - ZONE_SIZE/2);
+    frozenAngle = norm(zoneCenter + Math.PI); // ←ここが長い先端の初期角
+    lastInside = false;
+    lastAngle  = null;
   }
 
-  // 成功後：次ゾーンを 180°〜220° 先に
+  // 成功後：次ゾーンは成功角 + [180°,220°] 先に中心
   function moveZoneAfterSuccess(successAngle){
-    const min = CONFIG.nextZoneMinDeg * Math.PI/180;
-    const max = CONFIG.nextZoneMaxDeg * Math.PI/180;
-    const offset = min + Math.random()*(max-min);
+    const min = CONFIG.NEXT_MIN_DEG * Math.PI/180;
+    const max = CONFIG.NEXT_MAX_DEG * Math.PI/180;
+    const offset = min + Math.random()*(max - min);
     const center = norm(successAngle + offset);
-    zoneStart = norm(center - zoneSize/2);
-    lastInside=false; lastAngle=null;
+    zoneStart = norm(center - ZONE_SIZE/2);
+    lastInside = false; lastAngle = null; // 直後の誤検出防止
   }
 
   // 入力
   function onTap(){
     if(phase!=='play' || paused) return;
     const now = performance.now();
-    if(now - lastInputAt < CONFIG.inputCooldownMs) return;
+    if(now - lastInputAt < CONFIG.INPUT_CD_MS) return;
     lastInputAt = now;
 
     const a = angleAt(now);
-    const ok = inRange(a, zoneStart, norm(zoneStart+zoneSize));
+    const ok = inRange(a, zoneStart, norm(zoneStart + ZONE_SIZE));
     if(ok){
       try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
       streak++;
-      baseAngle=a; baseTime=now;     // 見た目と内部を同期
+      baseAngle = a; baseTime = now;           // 見た目と内部を同期
       moveZoneAfterSuccess(a);
-      draw(now, a);
+      draw(a);
     }else{
       gameOver();
     }
   }
 
-  // カウントダウン（針停止＆TAP無効）
+  // カウントダウン（1.5秒：針停止＆TAP無効）
   function showCountdown(){
     overlay.classList.add('show');
-    overlay.textContent='Ready';
-    tapBtn.disabled=true; phase='countdown';
-    const t0 = performance.now();
-    const mid = t0 + CONFIG.countdownMs*0.6;
-    const end = t0 + CONFIG.countdownMs;
+    overlay.textContent = 'Ready';
+    tapBtn.disabled = true;
+    phase = 'countdown';
 
-    function step(){
+    const t0 = performance.now();
+    const mid = t0 + CONFIG.COUNTDOWN_MS * 0.6;
+    const end = t0 + CONFIG.COUNTDOWN_MS;
+
+    const tick = () => {
       const now = performance.now();
       if(now >= end){
         overlay.classList.remove('show');
-        baseAngle=frozenAngle; baseTime=now; // GOで回転開始
-        phase='play'; tapBtn.disabled=false;
+        // GO → 回転開始
+        baseAngle = frozenAngle;
+        baseTime  = now;
+        phase = 'play';
+        tapBtn.disabled = false;
+        // 開始フレーム基準化（監視初期化）
+        const ang = angleAt(now);
+        lastAngle  = ang;
+        lastInside = inRange(ang, zoneStart, norm(zoneStart + ZONE_SIZE));
         return;
       }
-      if(now >= mid) overlay.textContent='GO!';
-      requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
+      if(now >= mid) overlay.textContent = 'GO!';
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   // 制御
   function startGame(){
+    // 既存ループ停止
+    if(rafId) cancelAnimationFrame(rafId);
+    streak = 0; paused = false;
+    setupInitial();
     resizeCanvas();
-    running=true; paused=false; streak=0;
-    setupInitialZoneAndNeedle();
     showCountdown();
-    requestAnimationFrame(loop);
+    rafId = requestAnimationFrame(loop);
   }
-
   function pauseGame(){
     if(phase!=='play') return;
     paused = !paused;
@@ -279,25 +299,21 @@
     if(!paused){
       const now = performance.now();
       const a = angleAt(now);
-      baseAngle=a; baseTime=now; draw(now,a);
+      baseAngle = a; baseTime = now; // 見た目と内部のズレを防止
+      draw(a);
     }
   }
-
-  function stopGame(){
-    running=false; paused=false; phase='idle';
-    tapBtn.disabled=true; overlay.classList.remove('show');
-  }
-
   function gameOver(){
     try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
-    stopGame();
+    phase = 'idle'; tapBtn.disabled = true;
+    if(rafId) cancelAnimationFrame(rafId);
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
   // ランキング（ローカルTOP5：日付＋連続回数）
-  const KEY='skillcheck_top5_fixed_v3';
-  function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
+  const KEY='skillcheck_top5_rebuild_v1';
+  const loadScores = ()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(entry){
     if(entry.score<=0) return;
     const arr = loadScores(); arr.push(entry);
@@ -307,16 +323,16 @@
   function renderRanking(){
     const arr = loadScores(); rankTbd.innerHTML='';
     arr.forEach((e,i)=>{
-      const dt = new Date(e.at);
-      const d  = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
+      const dt=new Date(e.at);
+      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
       rankTbd.appendChild(tr);
     });
   }
   function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
 
-  // ===== イベント（全部有効化） ====
+  // イベント
   startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
   pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
   rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); rankDlg.showModal(); }, {passive:false});
@@ -326,7 +342,7 @@
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
-  // 初期
+  // 初期化
   renderRanking();
   requestAnimationFrame(resizeCanvas);
 })();
