@@ -3,16 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>DBDスキルチェック：怒涛の嵐（基準統一・完全修正）</title>
+<title>スキルチェックゲーム</title>
 <style>
-  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; }
+  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#7dd3fc; }
   html,body{
     margin:0;height:100%;
     background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   }
-  .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px}
+  /* 装飾タイトル */
+  header.title{
+    width:100%; display:flex; justify-content:center; align-items:center;
+    padding:14px 8px; margin:0 0 6px;
+    background:linear-gradient(90deg, #0b1220, #0e1626);
+    border-bottom:1px solid #1f2b3a;
+  }
+  header.title h1{
+    margin:0; font-size:clamp(20px,5vw,28px); letter-spacing:.06em; font-weight:900;
+    background:linear-gradient(180deg, #eaf2ff, #9bd5ff 60%, #79c3ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 2px 18px rgba(125,211,252,.15);
+  }
+
+  .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
@@ -21,7 +35,7 @@
   }
   .overlay.show{display:flex}
 
-  .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
+  .tap-row{width:100%;max-width:720px;margin-top:8px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
     font-weight:900;font-size:clamp(18px,5vw,28px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);
@@ -29,7 +43,7 @@
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
 
-  .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px}
+  .bottombar{margin-top:6px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px}
   .btn{
     border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
     font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent
@@ -43,10 +57,11 @@
   .rank-list{width:100%;border-collapse:collapse}
   .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
   .rank-list th{color:#aab4bf;font-weight:600}
-  .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:4px}
 </style>
 </head>
 <body>
+  <header class="title"><h1>スキルチェックゲーム</h1></header>
+
   <div class="wrap">
     <div class="board">
       <canvas id="cv"></canvas>
@@ -62,8 +77,6 @@
       <button id="pauseBtn" class="btn warn">⏸ 一時停止</button>
       <button id="rankBtn"  class="btn alt">🏆 ランキング</button>
     </div>
-
-    <div class="hint">成功: <code>success.mp3</code>／失敗: <code>bomb.mp3</code></div>
   </div>
 
   <dialog id="rankDlg">
@@ -82,7 +95,7 @@
 
 <script>
 (() => {
-  // ===== 固定設定 =====
+  // ===== 設定 =====
   const CONFIG = {
     RPM: 60,                 // 一定速度
     ZONE_RATIO: 0.08,        // 白ゾーン角度幅（円周比）
@@ -115,7 +128,7 @@
   const FULL = Math.PI * 2;
   const ZONE_SIZE = FULL * CONFIG.ZONE_RATIO;
 
-  // 回転は baseAngle@baseTime（canvas標準：0rad=右、反時計回り）
+  // 回転は baseAngle@baseTime（0=右、反時計回り）
   let baseAngle = 0;
   let baseTime  = 0;
   // カウントダウン中の固定角
@@ -129,6 +142,9 @@
   let lastAngle = null;
   let lastInside = false;
 
+  // オフスクリーン（背景キャッシュ）
+  let bgCanvas = null, bgCtx = null;
+
   // DPR & リサイズ
   let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
@@ -138,11 +154,35 @@
     cv.width  = Math.round(cssW * dpr);
     cv.height = Math.round(cssH * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    // 再生成：背景キャッシュ
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width  = cv.width;
+    bgCanvas.height = cv.height;
+    bgCtx = bgCanvas.getContext('2d', {alpha:false});
+    bgCtx.setTransform(dpr,0,0,dpr,0,0);
+    renderStaticBg(); // 背景と外枠を一度だけ描く
     draw(getCurrentAngle(performance.now()));
   }
   new ResizeObserver(resizeCanvas).observe(cv);
 
-  // オーディオ
+  // 背景キャッシュ描画（重い円弧を毎フレーム描かない）
+  function renderStaticBg(){
+    const w = cssW, h = cssH;
+    const CX = w/2, CY = h/2;
+    const r  = Math.min(w,h)*0.42;
+
+    bgCtx.clearRect(0,0,w,h);
+
+    // 背景（板）
+    bgCtx.fillStyle = '#0b0e13';
+    bgCtx.fillRect(0,0,w,h);
+
+    // 外枠グレー（2px）
+    bgCtx.beginPath(); bgCtx.arc(CX, CY, r, 0, FULL);
+    bgCtx.lineWidth = 2; bgCtx.strokeStyle = '#1a2330'; bgCtx.stroke();
+  }
+
+  // オーディオ（事前デコード）
   const successAudio = new Audio('success.mp3');
   const bombAudio    = new Audio('bomb.mp3');
   [successAudio, bombAudio].forEach(a=>{ a.preload='auto'; a.volume=0.9; });
@@ -153,11 +193,10 @@
   document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
   ['gesturestart','gesturechange','gestureend'].forEach(ev=> window.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
 
-  // 角度ユーティリティ（canvas標準：0=右、反時計回り）
+  // 角度ユーティリティ
   const norm = a => (a % FULL + FULL) % FULL;
   const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
-  const cwDelta = (from,to)=> (to - from + FULL) % FULL; // 時計回りでの距離（通過検出用だが基準統一）
-
+  const cwDelta = (from,to)=> (to - from + FULL) % FULL;
   const angleAt = (t) => {
     const rps = CONFIG.RPM / 60;
     const delta = (t - baseTime)/1000;
@@ -165,23 +204,21 @@
   };
   const getCurrentAngle = (t) => (phase==='play') ? angleAt(t) : frozenAngle;
 
-  // 描画（針はcos/sinで座標直描画。回転行列は一切使わない → 基準ズレを根絶）
+  // フレーム描画
   function draw(angle){
     const w = cssW, h = cssH;
     const CX = w/2, CY = h/2;
     const r  = Math.min(w,h)*0.42;
 
+    // 背景キャッシュを転送
     ctx.clearRect(0,0,w,h);
+    if(bgCanvas) ctx.drawImage(bgCanvas, 0, 0, w, h);
 
-    // 外枠2px
-    ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
-    ctx.lineWidth = 2; ctx.strokeStyle = '#1a2330'; ctx.stroke();
-
-    // 白ゾーン
+    // 白ゾーン（可変なので都度描画）
     ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
     ctx.arc(CX, CY, r, zoneStart, zoneStart + ZONE_SIZE); ctx.stroke();
 
-    // 赤針（半径よりちょい長：前1.2R／後0.2R）
+    // 赤針（半径より少し長い：前1.2R／後0.2R）
     const front = r * 1.2, back = r * 0.2;
     const fx = CX + front * Math.cos(angle);
     const fy = CY + front * Math.sin(angle);
@@ -192,15 +229,14 @@
     ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444'; ctx.stroke();
   }
 
-  // ループ
+  // ループ（play中のみ通過ミス監視）
   function loop(now){
     const ang = getCurrentAngle(now);
     draw(ang);
 
     if(phase==='play' && !paused){
-      // 通過し切りのミス検出（ゾーン終端超え）
       const zoneEnd = norm(zoneStart + ZONE_SIZE);
-      const inside  = inRange(ang, zoneStart, zoneEnd);
+      const inside = inRange(ang, zoneStart, zoneEnd);
       if(lastAngle !== null){
         if(lastInside && !inside){
           const moved = cwDelta(lastAngle, ang);
@@ -215,11 +251,11 @@
     rafId = requestAnimationFrame(loop);
   }
 
-  // 初期配置：ゾーン中心をランダム→針はその真反対
+  // 初期配置：ゾーン中心ランダム→針はその真反対
   function setupInitial(){
     const center = Math.random()*FULL;
     zoneStart    = norm(center - ZONE_SIZE/2);
-    frozenAngle  = norm(center + Math.PI); // ★真反対（canvas標準角度系でそのまま）
+    frozenAngle  = norm(center + Math.PI); // 真反対
     lastInside = false; lastAngle = null;
   }
 
@@ -244,15 +280,15 @@
     if(ok){
       try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
       streak++;
-      baseAngle = a; baseTime = now;  // 内部基準を現在角に合わせる
+      baseAngle = a; baseTime = now;    // 内部基準を同期
       moveZoneAfterSuccess(a);
-      draw(a);
+      draw(a);                          // 切替直後も即描画して体感ラグを減らす
     }else{
       gameOver();
     }
   }
 
-  // カウントダウン（針は停止角のまま表示、TAP無効）
+  // カウントダウン（針は停止角、TAP無効）
   function showCountdown(){
     overlay.classList.add('show');
     overlay.textContent = 'Ready';
@@ -267,12 +303,10 @@
       const now = performance.now();
       if(now >= end){
         overlay.classList.remove('show');
-        // GO → 回転開始（針は今の停止角＝ゾーン反対側からスタート）
         baseAngle = frozenAngle;
         baseTime  = now;
         phase = 'play';
         tapBtn.disabled = false;
-        // 監視初期化
         const ang = angleAt(now);
         lastAngle  = ang;
         lastInside = inRange(ang, zoneStart, norm(zoneStart + ZONE_SIZE));
@@ -288,9 +322,9 @@
   function startGame(){
     if(rafId) cancelAnimationFrame(rafId);
     paused=false; streak=0;
-    setupInitial();          // ★ここでゾーンと針（真反対）を決定
-    resizeCanvas();          // すぐ反映（この時点でも針は反対側）
-    showCountdown();         // Ready→GO中は凍結角のまま
+    setupInitial();
+    resizeCanvas();
+    showCountdown();
     rafId = requestAnimationFrame(loop);
   }
   function pauseGame(){
@@ -300,7 +334,7 @@
     if(!paused){
       const now = performance.now();
       const a = angleAt(now);
-      baseAngle = a; baseTime = now; // 再開時にズレないよう揃える
+      baseAngle = a; baseTime = now;
       draw(a);
     }
   }
@@ -313,7 +347,7 @@
   }
 
   // ランキング（ローカルTOP5）
-  const KEY='skillcheck_top5_fixed_v4';
+  const KEY='skillcheck_top5_cachebg_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){
     if(e.score<=0) return;
@@ -331,22 +365,4 @@
       rankTbd.appendChild(tr);
     });
   }
-  function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
-
-  // イベント
-  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
-  pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
-  rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); rankDlg.showModal(); }, {passive:false});
-  closeRank.addEventListener('click', (e)=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
-  resetRank.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('ランキングをリセットしますか？')) resetRanking(); }, {passive:false});
-
-  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
-  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
-
-  // 初期
-  renderRanking();
-  requestAnimationFrame(resizeCanvas);
-})();
-</script>
-</body>
-</html>
+  function resetRanking(){ loca
