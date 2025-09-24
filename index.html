@@ -5,460 +5,107 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>スキルチェックゲーム</title>
 <style>
-  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#7dd3fc; --green:#34d399; }
-  html,body{
-    margin:0;height:100%;
-    background:var(--bg);color:var(--fg);
+  :root{ --bg:#0f1115; --fg:#eaeef2; }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
-  }
-  /* 上下余白しっかり詰めた上寄せ */
-  header.title{
-    width:100%;display:flex;justify-content:center;align-items:center;
-    padding:8px 6px;margin:0;background:linear-gradient(90deg,#0b1220,#0e1626);border-bottom:1px solid #1f2b3a
-  }
-  header.title h1{
-    margin:0;font-size:clamp(18px,4.3vw,24px);letter-spacing:.06em;font-weight:900;
-    background:linear-gradient(180deg,#eaf2ff,#9bd5ff 60%,#79c3ff);
-    -webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 2px 18px rgba(125,211,252,.15)
-  }
+    overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;}
+  header.title{width:100%;display:flex;justify-content:center;align-items:center;
+    padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
+  header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
 
-  .wrap{
-    min-height:calc(100dvh - 48px);
-    display:flex;flex-direction:column;align-items:center;gap:4px;
-    padding:4px 6px 2px;
-  }
+  .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px}
 
-  /* 盤面（高さはJSで可変。正方形） */
   .board{width:100%;max-width:720px;position:relative}
-  #cv{width:100%;height:100%;display:block;border-radius:12px;background:#0b0e13}
+  #cv{width:100%;height:100%;display:block;background:#0b0e13;border-radius:12px}
 
-  /* ミュート：円の左上あたりに固定 */
+  /* ミュートボタン（左上固定） */
   #muteBtn{
     position:absolute;top:6px;left:6px;z-index:5;
-    width:44px;height:44px;font-size:22px;
-    border-radius:10px;border:1px solid #26303a;
-    background:#1f2937;color:#eaeef2;cursor:pointer;
+    width:40px;height:40px;font-size:20px;line-height:1;
+    border-radius:8px;border:1px solid #26303a;background:#1f2937;
+    color:#eaeef2;cursor:pointer;text-align:center;
   }
 
-  .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
-    font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center;padding:8px}
-  .overlay.show{display:flex}
-  .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
-    text-align:center;background:rgba(0,0,0,.25);transform:translateY(9%)}
-  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;letter-spacing:.04em;
-    background:linear-gradient(180deg,#fff,#a7f3d0 60%,#6ee7b7);-webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 2px 20px rgba(110,231,183,.25)}
-
-  /* TAPを少し上へ、下に少し余白 */
   .tap-row{width:100%;max-width:820px;margin-top:-10px;display:flex;justify-content:center}
-  #tapBtn{
-    width:min(92%,620px);height:92px;border-radius:16px;border:2px solid #334155;
-    background:#0f131a;color:#e5e7eb;font-weight:900;
-    font-size:clamp(20px,6vw,30px);letter-spacing:1px;
-    box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer;
-    margin-bottom:10px; /* 下に少し余白 */
-  }
-  #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
+  #tapBtn{width:min(92%,620px);height:92px;margin-bottom:10px;
+    border:2px solid #334155;border-radius:16px;background:#0f131a;
+    font-weight:900;font-size:clamp(20px,6vw,30px);color:#e5e7eb}
+  #tapBtn[disabled]{opacity:.4}
 
-  /* スタート＋ランキング（通常） */
-  .bar{width:100%;max-width:820px;display:flex;justify-content:center;gap:8px;flex-wrap:nowrap;margin-top:0}
-  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  #startBtn{background:linear-gradient(180deg,#34d399,#10b981);border-color:#065f46;color:#062e26;box-shadow:0 8px 22px rgba(16,185,129,.35);
-    font-size:clamp(18px,5vw,22px);padding:12px 20px;letter-spacing:.04em}
-
-  /* 迫害モード行：ボタン右にランキング（迫害） */
-  #persecutionWrap{width:100%;max-width:820px;display:flex;justify-content:center;margin-top:0;gap:8px}
-  #persecutionBtn{display:none;background:linear-gradient(180deg,#f87171,#ef4444);border-color:#7f1d1d;color:#1b0a0a;
-    box-shadow:0 8px 22px rgba(239,68,68,.35);font-size:clamp(16px,4.5vw,20px);padding:12px 20px;border-radius:12px}
+  .bar{display:flex;justify-content:center;gap:8px}
+  .btn{border:1px solid #26303a;background:#1f2937;color:#fff;border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer}
+  #startBtn{background:#10b981;border-color:#065f46;color:#062e26}
+  #persecutionWrap{display:flex;justify-content:center;gap:8px}
+  #persecutionBtn{display:none;background:#ef4444;color:#fff;border-radius:12px;padding:12px 16px}
+  #rankPerBtn{display:none}
 
   dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
   .dlg-head{padding:12px 14px;border-bottom:1px solid #253040;font-weight:700}
-  .dlg-body{padding:10px 14px}
   .rank-list{width:100%;border-collapse:collapse}
-  .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
-  .rank-list th{color:#aab4bf;font-weight:600}
-
-  .celebrate{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4;display:none}
-  .celebrate.show{display:block}
-  .con{position:absolute;width:8px;height:14px;opacity:.9;border-radius:2px;animation:fall linear forwards}
-  @keyframes fall{0%{transform:translateY(-10vh) rotate(0deg)}100%{transform:translateY(110vh) rotate(720deg)}}
+  .rank-list th,.rank-list td{padding:6px;border-bottom:1px solid #1d2533}
 </style>
 </head>
 <body>
-  <header class="title" id="hdr"><h1>スキルチェックゲーム</h1></header>
+  <header class="title"><h1>スキルチェックゲーム</h1></header>
 
   <div class="wrap">
     <div class="board" id="board">
       <canvas id="cv"></canvas>
-      <button id="muteBtn" class="btn icon-btn" aria-label="ミュート切替">🔊</button>
-      <div id="welcome" class="welcome"><h2>目指せ 50連続！</h2></div>
-      <div id="overlay" class="overlay"></div>
-      <div id="celebrate" class="celebrate"></div>
+      <button id="muteBtn">🔊</button>
     </div>
 
-    <div class="tap-row" id="tapRow"><button id="tapBtn" disabled>TAP</button></div>
+    <div class="tap-row"><button id="tapBtn" disabled>TAP</button></div>
 
-    <!-- スタート＋ランキング（通常） -->
-    <div class="bar" id="btnBar">
+    <div class="bar">
       <button id="startBtn" class="btn">▶ スタート</button>
       <button id="rankNormalBtn" class="btn">ランキング（通常）</button>
     </div>
 
-    <!-- 迫害モード＋ランキング（迫害） -->
     <div id="persecutionWrap">
       <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
       <button id="rankPerBtn" class="btn">ランキング（迫害）</button>
     </div>
   </div>
 
-  <!-- ランキングダイアログ（共通） -->
   <dialog id="rankDlg">
-    <div class="dlg-head" id="rankTitle">🏆 自己ランキングTOP5（通常モード）</div>
-    <div class="dlg-body">
-      <table class="rank-list">
-        <thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead>
-        <tbody id="rankTbody"></tbody>
-      </table>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
-        <button id="closeRank" class="btn">閉じる</button>
-      </div>
-    </div>
+    <div class="dlg-head" id="rankTitle">🏆 ランキング</div>
+    <table class="rank-list"><tbody id="rankTbody"></tbody></table>
+    <button id="closeRank">閉じる</button>
   </dialog>
 
 <script>
 (() => {
-  // ===== 設定（滑らか仕様のまま） =====
-  const CONFIG = {
-    RPM: 60,
-    INPUT_CD_MS: 45,
-    NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 220,
-    COUNTDOWN_MS: 1500,
-    TARGET_STREAK: 50,
-    NORMAL_ZONE: 0.10,
-    PERSECUTE_ZONE: 0.06,
-    HIT_EPSILON_DEG: 1.5   // 微小越え許容（遅延吸収）
-  };
+  const CONFIG={RPM:60,NORMAL_ZONE:0.10,PERSECUTE_ZONE:0.06};
+  const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  const startBtn=document.getElementById('startBtn'),perBtn=document.getElementById('persecutionBtn');
+  const rankNormalBtn=document.getElementById('rankNormalBtn'),rankPerBtn=document.getElementById('rankPerBtn');
+  const muteBtn=document.getElementById('muteBtn');let isMuted=false;
+  let phase='idle',mode='normal',rafId;
 
-  // ===== 要素 =====
-  const $=(id)=>document.getElementById(id);
-  const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
-  const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn'), rankPerBtn=$('rankPerBtn');
-  const rankNormalBtn=$('rankNormalBtn'), muteBtn=$('muteBtn');
-  const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
-  const celebrateBox=$('celebrate');
+  // 音
+  const sounds={success:new Audio('success.mp3'),bomb:new Audio('bomb.mp3')};
+  function playSE(k){if(isMuted)return;try{sounds[k].currentTime=0;sounds[k].play();}catch{}}
+  muteBtn.onclick=()=>{isMuted=!isMuted;muteBtn.textContent=isMuted?'🔇':'🔊';};
 
-  // ===== 状態 =====
-  let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false;
-  let mode='normal', currentZoneRatio=CONFIG.NORMAL_ZONE;
-  const FULL=Math.PI*2;
-  const zoneSize=()=>FULL*currentZoneRatio;
-  let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
-  let lastAngle=null, lastInside=false;
+  // 描画
+  const FULL=Math.PI*2;let zoneStart=0,angle=0;
+  function draw(){const w=cv.width=cv.clientWidth,h=cv.height=cv.clientHeight;ctx.clearRect(0,0,w,h);
+    const r=Math.min(w,h)*0.38;ctx.beginPath();ctx.arc(w/2,h/2,r,0,FULL);ctx.strokeStyle="#1a2330";ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(w/2,h/2,r,zoneStart,zoneStart+FULL*0.1);ctx.strokeStyle="#fff";ctx.lineWidth=24;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(w/2+r*1.2*Math.cos(angle),h/2+r*1.2*Math.sin(angle));ctx.strokeStyle="#ef4444";ctx.lineWidth=6;ctx.stroke();}
+  function loop(){draw();rafId=requestAnimationFrame(loop);}
 
-  // ===== レイアウト：画面高にフィット（迫害ボタンも隠れない）=====
-  function visualH(){ return (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight; }
-  function fitBoardToViewport(){
-    const vh = visualH();
-    const headH = hdr?.offsetHeight || 0;
-    const tapH  = tapRow?.offsetHeight || 0;
-    const barH  = btnBar?.offsetHeight || 0;
-    const perH  = (persecutionWrap?.offsetHeight || 0) * (perBtn.style.display!=='none' || rankPerBtn.style.display!=='none' ? 1 : 0);
-    const wrapPad = 12; // バッファ
-    const reserve = headH + tapH + barH + perH + wrapPad;
-    const idealSide = Math.min(board.clientWidth || board.getBoundingClientRect().width || 320,
-                               Math.max(160, vh - reserve));
-    board.style.height = idealSide + 'px';
-  }
+  startBtn.onclick=()=>{mode='normal';phase='play';if(rafId)cancelAnimationFrame(rafId);loop();};
+  perBtn.onclick=()=>{mode='persecution';phase='play';if(rafId)cancelAnimationFrame(rafId);loop();};
 
-  // Canvas実寸更新
-  let cssW=0, cssH=0, dpr=1;
-  function resizeCanvas(){
-    fitBoardToViewport();
-    const rect=cv.getBoundingClientRect();
-    dpr=Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    cssW=rect.width||300; cssH=rect.height||300;
-    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw(getCurrentAngle(performance.now()));
-  }
-  window.addEventListener('resize', resizeCanvas);
-  window.addEventListener('orientationchange', resizeCanvas);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
-  if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
-  requestAnimationFrame(resizeCanvas);
+  rankNormalBtn.onclick=()=>openRank('normal');
+  rankPerBtn.onclick=()=>openRank('persecution');
+  function openRank(which){document.getElementById('rankTitle').textContent=(which==='normal')?'🏆 自己ランキングTOP5（通常モード）':'🏆 自己ランキングTOP5（迫害モード）';document.getElementById('rankDlg').showModal();}
+  document.getElementById('closeRank').onclick=()=>document.getElementById('rankDlg').close();
 
-  // ===== スクロール/ジェスチャ抑止 =====
-  document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
-  ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
-
-  // ===== サウンド：WebAudio事前デコード＋HTMLAudioフォールバック（ノンブロッキング） =====
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let actx=null, gMaster=null;
-  const buf = { success:null, bomb:null, ready:null, fanfare:null };
-  const html = {};
-  ['success','bomb','ready','fanfare'].forEach(k=>{ const a=new Audio(`${k}.mp3`); a.preload='auto'; a.playsInline=true; html[k]=a; });
-
-  async function unlockAndWarmAudio() {
-    try {
-      if (!actx) {
-        actx = new AudioCtx({ latencyHint:'interactive' });
-        gMaster = actx.createGain(); gMaster.gain.value = isMuted ? 0 : 1;
-        gMaster.connect(actx.destination);
-      }
-      if (actx.state === 'suspended') await actx.resume();
-      await Promise.all(Object.keys(buf).map(async k=>{
-        if (buf[k]) return;
-        const res = await fetch(`${k}.mp3`);
-        const ab  = await res.arrayBuffer();
-        buf[k] = await actx.decodeAudioData(ab);
-      }));
-    } catch(e) { /* フォールバックで鳴らす */ }
-  }
-  function setMuted(m){
-    isMuted = m;
-    if (gMaster) gMaster.gain.value = isMuted ? 0 : 1;
-    Object.values(html).forEach(a=>{ a.muted = isMuted; });
-    muteBtn.textContent = isMuted ? '🔇' : '🔊';
-  }
-  function playBuf(key, gain=0.95){
-    try{
-      if (!actx || !buf[key]) return false;
-      const src = actx.createBufferSource();
-      const g = actx.createGain(); g.gain.value = gain;
-      src.buffer = buf[key];
-      src.connect(g).connect(gMaster || actx.destination);
-      src.start(actx.currentTime);
-      return true;
-    }catch{ return false; }
-  }
-  function playSE(key){
-    if (isMuted) return;
-    if (playBuf(key)) return;
-    unlockAndWarmAudio();
-    const tag = html[key];
-    if (tag){ try{ tag.currentTime=0; tag.play(); }catch{} }
-  }
-  window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
-
-  // ===== 角度/描画 =====
-  const FULL=Math.PI*2;
-  const norm=a=>(a%FULL+FULL)%FULL;
-  const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
-  const cwDelta=(from,to)=>(to-from+FULL)%FULL;
-  const angleAt=(t)=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
-  const getCurrentAngle=(t)=>(phase==='play')?angleAt(t):frozenAngle;
-
-  function draw(angle){
-    const w=cv.clientWidth||cssW, h=cv.clientHeight||cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.378; /* 円0.9倍 */
-    const ZS=zoneSize();
-    ctx.clearRect(0,0,w,h);
-
-    // 外枠
-    ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL);
-    ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
-
-    // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
-    ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
-
-    // 赤い針（直線・短い側0）
-    const front=r*1.2;
-    const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
-    ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
-
-    // コンボ（中心より少し上）
-    const combo=String(streak);
-    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
-    ctx.lineWidth=Math.max(2,Math.round(r*0.04)); ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo,CX,CY-r*0.18);
-    ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18);
-    ctx.restore();
-  }
-
-  // ===== ループ =====
-  function loop(now){
-    const ang=getCurrentAngle(now);
-    draw(ang);
-
-    if(phase==='play'){
-      const ZS=zoneSize(), end=norm(zoneStart+ZS);
-      const inside=inRange(ang, zoneStart, end);
-      if(lastAngle!==null && lastInside && !inside){
-        const moved=cwDelta(lastAngle, ang), toEnd=cwDelta(lastAngle, end);
-        if(moved>=toEnd){ return gameOver(); } // ゾーン通過し切りでミス
-      }
-      lastInside=inside; lastAngle=ang;
-    }
-    rafId=requestAnimationFrame(loop);
-  }
-
-  // ===== タップ時刻（e.timeStamp）＋微小許容：滑らか仕様 =====
-  function tapTimestamp(e){
-    const ts=(e && typeof e.timeStamp==='number') ? e.timeStamp : performance.now();
-    return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
-  }
-
-  // ===== ロジック =====
-  function setupInitial(){
-    const center=Math.random()*FULL, ZS=zoneSize();
-    zoneStart = norm(center - ZS/2);
-    frozenAngle = norm(center + Math.PI); // ゾーン真反対
-    lastInside=false; lastAngle=null;
-    resizeCanvas(); // ゾーン決定直後にフィット
-  }
-  function moveZoneAfterSuccess(successAngle){
-    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
-    const nextCenter=norm(successAngle + (min + Math.random()*(max-min)));
-    const ZS=zoneSize();
-    zoneStart=norm(nextCenter - ZS/2);
-    lastInside=false; lastAngle=null;
-  }
-
-  function onTap(e){
-    if(phase!=='play') return;
-    const now=tapTimestamp(e);
-    if(now - lastInputAt < CONFIG.INPUT_CD_MS) return;
-    lastInputAt = now;
-
-    const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
-    const HIT_EPS = CONFIG.HIT_EPSILON_DEG * Math.PI / 180;
-    const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= HIT_EPS;
-
-    if(ok){
-      playSE('success'); // ノンブロッキング
-      streak++;
-      if(streak >= CONFIG.TARGET_STREAK){ celebrateAndUnlock(); return; }
-      baseAngle=a; baseTime=now;
-      moveZoneAfterSuccess(a);
-      draw(a);
-    }else{
-      gameOver();
-    }
-  }
-
-  function showCountdown(){
-    overlay.classList.add('show');
-    overlay.textContent='Ready';
-    tapBtn.disabled=true; phase='countdown';
-    const t0=performance.now(), mid=t0+CONFIG.COUNTDOWN_MS*0.6, end=t0+CONFIG.COUNTDOWN_MS;
-
-    const tick=()=>{
-      const now=performance.now();
-      if(now>=end){
-        overlay.classList.remove('show');
-        baseAngle=frozenAngle; baseTime=now;
-        phase='play'; tapBtn.disabled=false;
-        const ang=angleAt(now), ZS=zoneSize();
-        lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZS));
-        return;
-      }
-      if(now>=mid) overlay.textContent='GO!';
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }
-
-  function startGame(which){
-    mode = which;
-    currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
-    welcome.style.display='none';
-    playSE('ready'); unlockAndWarmAudio();
-    if(rafId) cancelAnimationFrame(rafId);
-    streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
-  }
-
-  function gameOver(){
-    playSE('bomb');
-    stopGame(true);
-    saveScore({score:streak, at:Date.now()});
-    renderRankingButtonsVisibility();
-  }
-
-  function stopGame(keepOverlay){
-    phase='idle'; tapBtn.disabled=true;
-    if(rafId) cancelAnimationFrame(rafId);
-    if(!keepOverlay) overlay.classList.remove('show');
-  }
-
-  function celebrateAndUnlock(){
-    stopGame(true);
-    playSE('fanfare');
-    overlay.innerHTML='おめでとう！50回達成だよ 🎉<br>迫害モード解放！';
-    overlay.classList.add('show');
-    runConfetti(220, 3000);
-    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    renderRankingButtonsVisibility();
-    saveScore({score:streak, at:Date.now()});
-  }
-
-  function runConfetti(n=200, dur=2800){
-    celebrateBox.innerHTML=''; celebrateBox.classList.add('show');
-    const colors=['#60a5fa','#f472b6','#34d399','#fbbf24','#c084fc','#fca5a5','#4ade80'];
-    const w=celebrateBox.clientWidth||window.innerWidth;
-    for(let i=0;i<n;i++){
-      const d=document.createElement('div'); d.className='con';
-      d.style.left=(Math.random()*w)+'px';
-      d.style.background=colors[i%colors.length];
-      d.style.animationDuration=(1.8+Math.random()*1.6)+'s';
-      d.style.animationDelay=(Math.random()*0.2)+'s';
-      d.style.transform=`translateY(-10vh) rotate(${Math.random()*360}deg)`;
-      celebrateBox.appendChild(d);
-    }
-    setTimeout(()=>{ celebrateBox.classList.remove('show'); celebrateBox.innerHTML=''; }, dur);
-  }
-
-  // ===== ランキング（通常／迫害 別）=====
-  const KEY_NORMAL='rank_normal_v1';
-  const KEY_PER   ='rank_per_v1';
-  function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
-  function saveScore(entry){
-    const key=(mode==='persecution')?KEY_PER:KEY_NORMAL;
-    if(entry.score<=0) return;
-    const arr=loadScores(key); arr.push(entry);
-    arr.sort((a,b)=> b.score-a.score || b.at-a.at);
-    localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
-  }
-  function openRanking(which){
-    const key=(which==='persecution')?KEY_PER:KEY_NORMAL;
-    const arr=loadScores(key);
-    rankTbody.innerHTML='';
-    arr.forEach((e,i)=>{
-      const d=new Date(e.at); const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
-      rankTbody.appendChild(tr);
-    });
-    rankTitle.textContent=(which==='persecution')?'🏆 自己ランキングTOP5（迫害モード）':'🏆 自己ランキングTOP5（通常モード）';
-    if(rankDlg?.showModal) rankDlg.showModal();
-  }
-
-  // 迫害モード解放状況でボタン表示を切替
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
-  function renderRankingButtonsVisibility(){
-    const unlocked=isUnlocked();
-    perBtn.style.display = unlocked ? 'inline-block' : 'none';
-    rankPerBtn.style.display = unlocked ? 'inline-block' : 'none';
-    requestAnimationFrame(resizeCanvas); // 高さ再フィット
-  }
-
-  // ===== イベント =====
-  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
-  perBtn   .addEventListener('click', (e)=>{ e.preventDefault(); startGame('persecution'); }, {passive:false});
-  tapBtn   .addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(e); }, {passive:false});
-  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
-
-  muteBtn     .addEventListener('click', (e)=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
-  rankNormalBtn.addEventListener('click', (e)=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
-  rankPerBtn   .addEventListener('click', (e)=>{ e.preventDefault(); openRanking('persecution'); }, {passive:false});
-  closeRank    .addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close) rankDlg.close(); }, {passive:false});
-
-  // 初期
-  setMuted(false);
-  renderRankingButtonsVisibility();
+  // 初期表示
+  function renderBtns(){const unlocked=localStorage.getItem('skillcheck_unlock_persecution')==='1';perBtn.style.display=unlocked?'inline-block':'none';rankPerBtn.style.display=unlocked?'inline-block':'none';}
+  renderBtns();draw();
 })();
 </script>
 </body>
