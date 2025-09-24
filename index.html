@@ -33,7 +33,7 @@
   .overlay.show{display:flex}
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
-  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);padding-top:30px;font-weight:900;color:#c8ffe0}
+  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;color:#c8ffe0}
 
   /* TAPを少し上へ、下に少し余白 */
   .tap-row{width:100%;max-width:820px;margin-top:10px;display:flex;justify-content:center}
@@ -65,7 +65,7 @@
     <div class="board" id="board">
       <canvas id="cv"></canvas>
       <button id="muteBtn" aria-label="ミュート切替">🔊</button>
-      <div id="welcome" class="welcome"><h2>目指せ 50回！</h2></div>
+      <div id="welcome" class="welcome"><h2>目指せ 50連続！</h2></div>
       <div id="overlay" class="overlay"></div>
     </div>
 
@@ -92,283 +92,272 @@
       <div style="display:flex;justify-content:flex-end;gap:8px;margin:10px 14px 14px"><button id="closeRank" class="btn">閉じる</button></div>
     </div>
   </dialog>
+
 <script>
 (() => {
-  // ===== 設定（安定動作の仕様） =====
-  const CONFIG = {
-    RPM: 60,
-    INPUT_CD_MS: 45,
-    NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 220,
-    COUNTDOWN_MS: 1500,
-    TARGET_STREAK: 50,
-    NORMAL_ZONE: 0.10,
-    PERSECUTE_ZONE: 0.06,
-    HIT_EPSILON_DEG: 1.5
-  };
+  // ===== 設定（安定動作の仕様） =====
+  const CONFIG = {
+    RPM: 60,
+    INPUT_CD_MS: 45,
+    NEXT_MIN_DEG: 180,
+    NEXT_MAX_DEG: 220,
+    COUNTDOWN_MS: 1500,
+    TARGET_STREAK: 50,
+    NORMAL_ZONE: 0.10,
+    PERSECUTE_ZONE: 0.06,
+    HIT_EPSILON_DEG: 1.5
+  };
 
-  // ===== 要素 =====
-  const $=id=>document.getElementById(id);
-  const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
-  const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn');
-  const rankNormalBtn=$('rankNormalBtn'), rankPerBtn=$('rankPerBtn');
-  const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome');
-  const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
+  // ===== 要素 =====
+  const $=id=>document.getElementById(id);
+  const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
+  const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn');
+  const rankNormalBtn=$('rankNormalBtn'), rankPerBtn=$('rankPerBtn');
+  const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome');
+  const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
 
-  // ===== 状態 =====
-  let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false, showNeedle=true; // ← 変更: showNeedle を追加
-  let mode='normal', currentZoneRatio=CONFIG.NORMAL_ZONE;
-  const FULL=Math.PI*2;
-  const zoneSize=()=>FULL*currentZoneRatio;
-  let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
-  let lastAngle=null, lastInside=false;
+  // ===== 状態 =====
+  let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false;
+  let mode='normal', currentZoneRatio=CONFIG.NORMAL_ZONE;
+  const FULL=Math.PI*2;
+  const zoneSize=()=>FULL*currentZoneRatio;
+  let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
+  let lastAngle=null, lastInside=false;
 
-  // ===== 画面高フィット（ボタンが隠れない） =====
-  function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
-  function fitBoardToViewport(){
-    const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
-    const perH=(persecutionWrap.offsetHeight||0) * ((perBtn.style.display!=='none'||rankPerBtn.style.display!=='none')?1:0);
-    const reserve=headH+tapH+barH+perH+12;
-    const idealSide=Math.min(board.clientWidth||board.getBoundingClientRect().width||320, Math.max(160, vh-reserve));
-    board.style.height=idealSide+'px';
-  }
-  let cssW=0, cssH=0, dpr=1;
-  function resizeCanvas(){
-    fitBoardToViewport();
-    const rect=cv.getBoundingClientRect();
-    dpr=Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    cssW=rect.width||300; cssH=rect.height||300;
-    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw(getCurrentAngle(performance.now()));
-  }
-  window.addEventListener('resize', resizeCanvas);
-  window.addEventListener('orientationchange', resizeCanvas);
-  window.visualViewport?.addEventListener('resize', resizeCanvas);
-  requestAnimationFrame(resizeCanvas); // ← 初期に必ず呼ぶ
+  // ===== 画面高フィット（ボタンが隠れない） =====
+  function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
+  function fitBoardToViewport(){
+    const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
+    const perH=(persecutionWrap.offsetHeight||0) * ((perBtn.style.display!=='none'||rankPerBtn.style.display!=='none')?1:0);
+    const reserve=headH+tapH+barH+perH+12;
+    const idealSide=Math.min(board.clientWidth||board.getBoundingClientRect().width||320, Math.max(160, vh-reserve));
+    board.style.height=idealSide+'px';
+  }
+  let cssW=0, cssH=0, dpr=1;
+  function resizeCanvas(){
+    fitBoardToViewport();
+    const rect=cv.getBoundingClientRect();
+    dpr=Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    cssW=rect.width||300; cssH=rect.height||300;
+    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw(getCurrentAngle(performance.now()));
+  }
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', resizeCanvas);
+  window.visualViewport?.addEventListener('resize', resizeCanvas);
+  requestAnimationFrame(resizeCanvas); // ← 初期に必ず呼ぶ
 
-  // ===== スクロール/ジェスチャ抑止 =====
-  document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
-  ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
+  // ===== スクロール/ジェスチャ抑止 =====
+  document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
+  ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ===== サウンド（WebAudio＋フォールバック／ノンブロッキング）=====
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  let actx=null,gMaster=null;
-  const buf={success:null,bomb:null,ready:null,fanfare:null};
-  const html={};['success','bomb','ready','fanfare'].forEach(k=>{const a=new Audio(`${k}.mp3`);a.preload='auto';a.playsInline=true;html[k]=a;});
-  async function unlockAndWarmAudio(){
-    try{
-      if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=isMuted?0:1; gMaster.connect(actx.destination);}
-      if(actx.state==='suspended') await actx.resume();
-      await Promise.all(Object.keys(buf).map(async k=>{ if(buf[k]) return; const res=await fetch(`${k}.mp3`); const ab=await res.arrayBuffer(); buf[k]=await actx.decodeAudioData(ab); }));
-    }catch{}
-  }
-  function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
-  function playBuf(key,gain=0.95){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
-  function playSE(key){ if(isMuted) return; if(playBuf(key)) return; unlockAndWarmAudio(); const tag=html[key]; if(tag){ try{ tag.currentTime=0; tag.play(); }catch{} } }
-  window.addEventListener('pointerdown', ()=>{ unlockAndWarmAudio(); }, {once:true});
+  // ===== サウンド（WebAudio＋フォールバック／ノンブロッキング）=====
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  let actx=null,gMaster=null;
+  const buf={success:null,bomb:null,ready:null,fanfare:null};
+  const html={};['success','bomb','ready','fanfare'].forEach(k=>{const a=new Audio(`${k}.mp3`);a.preload='auto';a.playsInline=true;html[k]=a;});
+  async function unlockAndWarmAudio(){
+    try{
+      if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=isMuted?0:1; gMaster.connect(actx.destination);}
+      if(actx.state==='suspended') await actx.resume();
+      await Promise.all(Object.keys(buf).map(async k=>{ if(buf[k]) return; const res=await fetch(`${k}.mp3`); const ab=await res.arrayBuffer(); buf[k]=await actx.decodeAudioData(ab); }));
+    }catch{}
+  }
+  function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
+  function playBuf(key,gain=0.95){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
+  function playSE(key){ if(isMuted) return; if(playBuf(key)) return; unlockAndWarmAudio(); const tag=html[key]; if(tag){ try{ tag.currentTime=0; tag.play(); }catch{} } }
+  window.addEventListener('pointerdown', ()=>{ unlockAndWarmAudio(); }, {once:true});
 
-  // ===== 角度/描画（円は係数0.42で元サイズ）=====
-  const norm=a=>(a%FULL+FULL)%FULL;
-  const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
-  const cwDelta=(f,t)=>(t-f+FULL)%FULL;
-  const angleAt=t=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
-  const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
+  // ===== 角度/描画（円は係数0.42で元サイズ）=====
+  const norm=a=>(a%FULL+FULL)%FULL;
+  const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
+  const cwDelta=(f,t)=>(t-f+FULL)%FULL;
+  const angleAt=t=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
+  const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
 
-  function draw(angle){
-    const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.42;  /* ← 元の大きさ */
-    const ZS=zoneSize();
-    ctx.clearRect(0,0,w,h);
-    // 外枠
-    ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
-    // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
-    ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
-    
-    // ← 変更: showNeedle が true の時だけ針を描画する
-    if(showNeedle){
-      // 赤い針（直線・短い側0）
-      const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
-      ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
-      ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
-    }
-    
-    // コンボ（中心より少し上）
-    const combo=String(streak);
-    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
-    ctx.lineWidth=Math.max(2,Math.round(r*0.04)); ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo,CX,CY-r*0.18);
-    ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18); ctx.restore();
-  }
+  function draw(angle){
+    const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.42;  /* ← 元の大きさ */
+    const ZS=zoneSize();
+    ctx.clearRect(0,0,w,h);
+    // 外枠
+    ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
+    // 白ゾーン
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
+    ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
+    // 赤い針（直線・短い側0）
+    const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
+    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
+    ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
+    // コンボ（中心より少し上）
+    const combo=String(streak);
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
+    ctx.lineWidth=Math.max(2,Math.round(r*0.04)); ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo,CX,CY-r*0.18);
+    ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18); ctx.restore();
+  }
 
-  // ===== ループ =====
-  function loop(now){
-    const ang=getCurrentAngle(now);
-    draw(ang);
-    if(phase==='play'){
-      const ZS=zoneSize(), end=norm(zoneStart+ZS);
-      const inside=inRange(ang,zoneStart,end);
-      if(lastAngle!==null && lastInside && !inside){
-        const moved=cwDelta(lastAngle,ang), toEnd=cwDelta(lastAngle,end);
-        if(moved>=toEnd){ return gameOver(); }
-      }
-      lastInside=inside; lastAngle=ang;
-    }
-    rafId=requestAnimationFrame(loop);
-  }
+  // ===== ループ =====
+  function loop(now){
+    const ang=getCurrentAngle(now);
+    draw(ang);
+    if(phase==='play'){
+      const ZS=zoneSize(), end=norm(zoneStart+ZS);
+      const inside=inRange(ang,zoneStart,end);
+      if(lastAngle!==null && lastInside && !inside){
+        const moved=cwDelta(lastAngle,ang), toEnd=cwDelta(lastAngle,end);
+        if(moved>=toEnd){ return gameOver(); }
+      }
+      lastInside=inside; lastAngle=ang;
+    }
+    rafId=requestAnimationFrame(loop);
+  }
 
-  // ===== 判定（e.timeStamp＋微小許容）=====
-  function tapTimestamp(e){
-    const ts=(e&&typeof e.timeStamp==='number')?e.timeStamp:performance.now();
-    return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
-  }
+  // ===== 判定（e.timeStamp＋微小許容）=====
+  function tapTimestamp(e){
+    const ts=(e&&typeof e.timeStamp==='number')?e.timeStamp:performance.now();
+    return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
+  }
 
-  // ===== ゲームロジック =====
-  function setupInitial(){
-    const center=Math.random()*FULL, ZS=zoneSize();
-    zoneStart = norm(center - ZS/2);
-    frozenAngle = norm(center + Math.PI);
-    lastInside=false; lastAngle=null;
-    resizeCanvas(); // 初回に確実に描画
-  }
-  function moveZoneAfterSuccess(a){
-    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
-    const nextCenter=norm(a + (min + Math.random()*(max-min)));
-    const ZS=zoneSize();
-    zoneStart=norm(nextCenter - ZS/2);
-    lastInside=false; lastAngle=null;
-  }
+  // ===== ゲームロジック =====
+  function setupInitial(){
+    const center=Math.random()*FULL, ZS=zoneSize();
+    zoneStart = norm(center - ZS/2);
+    frozenAngle = norm(center + Math.PI);
+    lastInside=false; lastAngle=null;
+    resizeCanvas(); // 初回に確実に描画
+  }
+  function moveZoneAfterSuccess(a){
+    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
+    const nextCenter=norm(a + (min + Math.random()*(max-min)));
+    const ZS=zoneSize();
+    zoneStart=norm(nextCenter - ZS/2);
+    lastInside=false; lastAngle=null;
+  }
 
-  function onTap(e){
-    if(phase!=='play') return;
-    const now=tapTimestamp(e);
-    if(now-lastInputAt<CONFIG.INPUT_CD_MS) return;
-    lastInputAt=now;
+  function onTap(e){
+    if(phase!=='play') return;
+    const now=tapTimestamp(e);
+    if(now-lastInputAt<CONFIG.INPUT_CD_MS) return;
+    lastInputAt=now;
 
-    const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
-    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180;
-    const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= EPS;
+    const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
+    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180;
+    const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= EPS;
 
-    if(ok){
-      playSE('success');
-      streak++;
-      if(streak>=CONFIG.TARGET_STREAK){ return celebrateAndUnlock(); }
-      baseAngle=a; baseTime=now; moveZoneAfterSuccess(a); draw(a);
-    }else{
-      gameOver();
-    }
-  }
+    if(ok){
+      playSE('success');
+      streak++;
+      if(streak>=CONFIG.TARGET_STREAK){ return celebrateAndUnlock(); }
+      baseAngle=a; baseTime=now; moveZoneAfterSuccess(a); draw(a);
+    }else{
+      gameOver();
+    }
+  }
 
-  function showCountdown(){
-    overlay.classList.add('show'); overlay.textContent='Ready';
-    tapBtn.disabled=true; phase='countdown';
-    const t0=performance.now(), mid=t0+CONFIG.COUNTDOWN_MS*0.6, end=t0+CONFIG.COUNTDOWN_MS;
-    const tick=()=>{
-      const now=performance.now();
-      if(now>=end){
-        overlay.classList.remove('show');
-        baseAngle=frozenAngle; baseTime=now;
-        phase='play'; tapBtn.disabled=false;
-        const ang=angleAt(now), ZS=zoneSize();
-        lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZS));
-        return;
-      }
-      if(now>=mid) overlay.textContent='GO!';
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }
+  function showCountdown(){
+    overlay.classList.add('show'); overlay.textContent='Ready';
+    tapBtn.disabled=true; phase='countdown';
+    const t0=performance.now(), mid=t0+CONFIG.COUNTDOWN_MS*0.6, end=t0+CONFIG.COUNTDOWN_MS;
+    const tick=()=>{
+      const now=performance.now();
+      if(now>=end){
+        overlay.classList.remove('show');
+        baseAngle=frozenAngle; baseTime=now;
+        phase='play'; tapBtn.disabled=false;
+        const ang=angleAt(now), ZS=zoneSize();
+        lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZS));
+        return;
+      }
+      if(now>=mid) overlay.textContent='GO!';
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
 
-  function startGame(which){
-    showNeedle = true; // ← 変更: ゲーム開始時に針を必ず表示
-    mode=which;
-    currentZoneRatio=(mode==='persecution')?CONFIG.PERSECUTE_ZONE:CONFIG.NORMAL_ZONE;
-    welcome.style.display='none';
-    playSE('ready'); unlockAndWarmAudio();
-    if(rafId) cancelAnimationFrame(rafId);
-    streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
-  }
+  function startGame(which){
+    mode=which;
+    currentZoneRatio=(mode==='persecution')?CONFIG.PERSECUTE_ZONE:CONFIG.NORMAL_ZONE;
+    welcome.style.display='none';
+    playSE('ready'); unlockAndWarmAudio();
+    if(rafId) cancelAnimationFrame(rafId);
+    streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
+  }
 
-  // ← 変更: ゲームオーバー処理を修正
-  function gameOver(){
-    playSE('bomb');
-    showNeedle = false; // 針を非表示にする
-    stopGame(true);
-    // ゲームオーバーメッセージを表示
-    overlay.innerHTML = `GAME OVER<br>SCORE: ${streak}`;
-    overlay.classList.add('show');
-    draw(frozenAngle); // 針が消えた状態を即時反映させる
-    saveScore({score:streak, at:Date.now()});
-    updateUnlockVisibility();
-  }
+  function gameOver(){
+    playSE('bomb');
+    stopGame(true);
+    saveScore({score:streak, at:Date.now()});
+    updateUnlockVisibility();
+  }
 
-  function stopGame(keepOverlay){
-    phase='idle'; tapBtn.disabled=true;
-    if(rafId) cancelAnimationFrame(rafId);
-    if(!keepOverlay) overlay.classList.remove('show');
-  }
+  function stopGame(keepOverlay){
+    phase='idle'; tapBtn.disabled=true;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(!keepOverlay) overlay.classList.remove('show');
+  }
 
-  function celebrateAndUnlock(){
-    stopGame(true);
-    playSE('fanfare');
-    overlay.innerHTML='おめでとう!!<br>50回達成だよ 🎉<br>迫害モード解放！';
-    overlay.classList.add('show');
-    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    updateUnlockVisibility();
-    saveScore({score:streak, at:Date.now()});
-  }
+  function celebrateAndUnlock(){
+    stopGame(true);
+    playSE('fanfare');
+    overlay.innerHTML='おめでとう！50回達成だよ 🎉<br>迫害モード解放！';
+    overlay.classList.add('show');
+    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
+    updateUnlockVisibility();
+    saveScore({score:streak, at:Date.now()});
+  }
 
-  // ===== ランキング（通常／迫害 別保存）=====
-  const KEY_NORMAL='rank_normal_v2';
-  const KEY_PER   ='rank_per_v2';
-  function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
-  function saveScore(entry){
-    const key=(mode==='persecution')?KEY_PER:KEY_NORMAL;
-    if(entry.score<=0) return;
-    const arr=loadScores(key); arr.push(entry);
-    arr.sort((a,b)=> b.score-a.score || b.at-a.at);
-    localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
-  }
-  function openRanking(which){
-    const key=(which==='persecution')?KEY_PER:KEY_NORMAL;
-    const arr=loadScores(key);
-    rankTbody.innerHTML='';
-    arr.forEach((e,i)=>{
-      const d=new Date(e.at);
-      const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
-      rankTbody.appendChild(tr);
-    });
-    rankTitle.textContent=(which==='persecution')?'🏆 自己ランキングTOP5（迫害モード）':'🏆 自己ランキングTOP5（通常モード）';
-    rankDlg.showModal();
-  }
+  // ===== ランキング（通常／迫害 別保存）=====
+  const KEY_NORMAL='rank_normal_v2';
+  const KEY_PER   ='rank_per_v2';
+  function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
+  function saveScore(entry){
+    const key=(mode==='persecution')?KEY_PER:KEY_NORMAL;
+    if(entry.score<=0) return;
+    const arr=loadScores(key); arr.push(entry);
+    arr.sort((a,b)=> b.score-a.score || b.at-a.at);
+    localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
+  }
+  function openRanking(which){
+    const key=(which==='persecution')?KEY_PER:KEY_NORMAL;
+    const arr=loadScores(key);
+    rankTbody.innerHTML='';
+    arr.forEach((e,i)=>{
+      const d=new Date(e.at);
+      const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
+      rankTbody.appendChild(tr);
+    });
+    rankTitle.textContent=(which==='persecution')?'🏆 自己ランキングTOP5（迫害モード）':'🏆 自己ランキングTOP5（通常モード）';
+    rankDlg.showModal();
+  }
 
-  // ===== ボタン可視制御（解放前は迫害系を隠す）=====
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
-  function updateUnlockVisibility(){
-    const unlocked=isUnlocked();
-    perBtn.style.display = unlocked ? 'inline-block' : 'none';
-    rankPerBtn.style.display = unlocked ? 'inline-block' : 'none';
-    requestAnimationFrame(resizeCanvas);
-  }
+  // ===== ボタン可視制御（解放前は迫害系を隠す）=====
+  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
+  function updateUnlockVisibility(){
+    const unlocked=isUnlocked();
+    perBtn.style.display = unlocked ? 'inline-block' : 'none';
+    rankPerBtn.style.display = unlocked ? 'inline-block' : 'none';
+    requestAnimationFrame(resizeCanvas);
+  }
 
-  // ===== イベント =====
-  startBtn.addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
-  perBtn  .addEventListener('click', e=>{ e.preventDefault(); startGame('persecution'); }, {passive:false});
-  tapBtn  .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
-  window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
+  // ===== イベント =====
+  startBtn.addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
+  perBtn  .addEventListener('click', e=>{ e.preventDefault(); startGame('persecution'); }, {passive:false});
+  tapBtn  .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
 
-  muteBtn.addEventListener('click', e=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
-  $('rankNormalBtn').addEventListener('click', e=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
-  $('rankPerBtn')    .addEventListener('click', e=>{ e.preventDefault(); openRanking('persecution'); }, {passive:false});
-  $('closeRank')    .addEventListener('click', e=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
+  muteBtn.addEventListener('click', e=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
+  $('rankNormalBtn').addEventListener('click', e=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
+  $('rankPerBtn')   .addEventListener('click', e=>{ e.preventDefault(); openRanking('persecution'); }, {passive:false});
+  $('closeRank')    .addEventListener('click', e=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
 
-  // ===== 初期化 =====
-  setMuted(false);
-  updateUnlockVisibility();
-  // 初期描画も安全に
-  requestAnimationFrame(()=>{ resizeCanvas(); });
+  // ===== 初期化 =====
+  setMuted(false);
+  updateUnlockVisibility();
+  // 初期描画も安全に
+  requestAnimationFrame(()=>{ resizeCanvas(); });
 
 })();
 </script>
