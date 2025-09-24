@@ -26,9 +26,7 @@
   }
 
   .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
-  .board{width:100%;max-width:720px;position:relative}
-  /* aspect-ratio 使えない環境でもJSで高さ調整するのでOK */
-  .board{aspect-ratio:1/1}
+  .board{width:100%;max-width:720px;position:relative;aspect-ratio:1/1}
   canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
     position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;
@@ -96,68 +94,87 @@
 
 <script>
 (() => {
-  // ====== 安全ガード ======
+  // ========= 設定 =========
+  const CONFIG = {
+    RPM: 60,                 // 一定速度
+    ZONE_RATIO: 0.18,        // ★白ゾーン角度幅（広げる/狭めるのはここ）
+    INPUT_CD_MS: 45,         // 誤爆防止
+    NEXT_MIN_DEG: 180,       // 成功後：成功角 + [180°,220°] に次ゾーン中心
+    NEXT_MAX_DEG: 220,
+    COUNTDOWN_MS: 1500       // Ready→GO（針は止める）
+  };
+
+  // ========= 要素 =========
   const $ = (id) => document.getElementById(id);
   const board = $('board'), cv = $('cv'), ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
   const tapBtn=$('tapBtn'), startBtn=$('startBtn'), pauseBtn=$('pauseBtn'), rankBtn=$('rankBtn');
   const overlay=$('overlay'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
   const closeRank=$('closeRank'), resetRank=$('resetRank');
 
-  // ====== 設定 ======
-  const CONFIG = {
-    RPM: 60,
-    ZONE_RATIO: 0.08,          // 白ゾーン角度幅
-    INPUT_CD_MS: 45,
-    NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 220,
-    COUNTDOWN_MS: 1500
-  };
-
-  // ====== 状態 ======
+  // ========= 状態 =========
   let phase='idle', paused=false, streak=0, lastInputAt=0, rafId=0;
   const FULL = Math.PI*2, ZONE_SIZE = FULL*CONFIG.ZONE_RATIO;
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
 
-  // ====== レイアウト（aspect-ratio非対応でも正方形維持） ======
+  // ========= レイアウト（aspect-ratio 非対応対策） =========
   let cssW=0, cssH=0, dpr=1;
   function ensureSquare(){
-    // aspect-ratio未対応でも高さを幅に合わせる
     const bw = board.clientWidth || board.getBoundingClientRect().width || 300;
     board.style.height = bw + 'px';
   }
   function resizeCanvas(){
-    try{
-      ensureSquare();
-      const rect = cv.getBoundingClientRect();
-      dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
-      cssW = rect.width||300; cssH = rect.height||300;
-      cv.width  = Math.round(cssW * dpr);
-      cv.height = Math.round(cssH * dpr);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      draw(getCurrentAngle(performance.now()));
-    }catch(e){ console.error(e); }
+    ensureSquare();
+    const rect = cv.getBoundingClientRect();
+    dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    cssW = rect.width||300; cssH = rect.height||300;
+    cv.width  = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw(getCurrentAngle(performance.now()));
   }
-  // 初期＆リサイズ
   window.addEventListener('resize', resizeCanvas);
-  if (window.ResizeObserver) {
-    try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {}
+  if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
+  requestAnimationFrame(resizeCanvas); // 初回必ず描画
+
+  // ========= Web Audio：ラグ対策（事前デコード再生） =========
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let actx, bufSuccess=null, bufBomb=null;
+  async function unlockAndWarmAudio() {
+    try {
+      if (!actx) actx = new AudioCtx({ latencyHint: 'interactive' });
+      if (actx.state === 'suspended') await actx.resume();
+      if (!bufSuccess) {
+        const res1 = await fetch('success.mp3'); const ab1 = await res1.arrayBuffer();
+        bufSuccess = await actx.decodeAudioData(ab1);
+      }
+      if (!bufBomb) {
+        const res2 = await fetch('bomb.mp3'); const ab2 = await res2.arrayBuffer();
+        bufBomb = await actx.decodeAudioData(ab2);
+      }
+    } catch(e) {
+      console.warn('WebAudio warm failed', e);
+    }
   }
-  // 初回は必ず実行
-  requestAnimationFrame(resizeCanvas);
+  function playBuffer(buf, gain=0.9){
+    if (!actx || !buf) return;
+    const src = actx.createBufferSource();
+    const g   = actx.createGain();
+    g.gain.value = gain;
+    src.buffer = buf;
+    src.connect(g).connect(actx.destination);
+    src.start(actx.currentTime);
+  }
+  function playSuccess(){ playBuffer(bufSuccess, 0.9); }
+  function playBomb(){ playBuffer(bufBomb, 0.9); }
+  // 初回ジェスチャで解放・事前デコード
+  window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
 
-  // ====== オーディオ ======
-  const successAudio = new Audio('success.mp3');
-  const bombAudio    = new Audio('bomb.mp3');
-  [successAudio, bombAudio].forEach(a=>{ a.preload='auto'; a.volume=0.9; });
-  const warm=a=>a.play().then(()=>{a.pause();a.currentTime=0;}).catch(()=>{});
-  window.addEventListener('pointerdown', function unlock(){ warm(successAudio); warm(bombAudio); window.removeEventListener('pointerdown', unlock); }, {once:true});
-
-  // ====== iOSズーム抑止 ======
+  // ========= iOS のズーム抑止 =========
   document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
   ['gesturestart','gesturechange','gestureend'].forEach(ev=> window.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
 
-  // ====== 角度計算 ======
+  // ========= 角度 & 描画 =========
   const norm = a => (a % FULL + FULL) % FULL;
   const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
   const cwDelta = (from,to)=> (to - from + FULL) % FULL;
@@ -168,20 +185,19 @@
   };
   const getCurrentAngle = (t) => (phase==='play') ? angleAt(t) : frozenAngle;
 
-  // ====== 描画 ======
   function draw(angle){
     const w=cssW, h=cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.42;
     ctx.clearRect(0,0,w,h);
 
-    // 外枠2px
+    // 外枠 2px（軽量）
     ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
     ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 白ゾーン
+    // 白ゾーン（太さ24px）
     ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX, CY, r, zoneStart, zoneStart+ZONE_SIZE); ctx.stroke();
 
-    // 赤針（前1.2R／後0.2R）
+    // 赤針（半径より少し長い：前1.2R／後0.2R）
     const front=r*1.2, back=r*0.2;
     const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
     const bx=CX-back *Math.cos(angle), by=CY-back *Math.sin(angle);
@@ -189,31 +205,29 @@
     ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
   }
 
-  // ====== ループ ======
+  // ========= ループ =========
   function loop(now){
-    try{
-      const ang=getCurrentAngle(now);
-      draw(ang);
+    const ang=getCurrentAngle(now);
+    draw(ang);
 
-      if(phase==='play' && !paused){
-        const zoneEnd=norm(zoneStart+ZONE_SIZE);
-        const inside=inRange(ang, zoneStart, zoneEnd);
-        if(lastAngle!==null && lastInside && !inside){
-          const moved=cwDelta(lastAngle, ang);
-          const toEnd=cwDelta(lastAngle, zoneEnd);
-          if(moved>=toEnd){ return gameOver(); }
-        }
-        lastInside=inside; lastAngle=ang;
+    if(phase==='play' && !paused){
+      const zoneEnd=norm(zoneStart+ZONE_SIZE);
+      const inside=inRange(ang, zoneStart, zoneEnd);
+      if(lastAngle!==null && lastInside && !inside){
+        const moved=cwDelta(lastAngle, ang);
+        const toEnd=cwDelta(lastAngle, zoneEnd);
+        if(moved>=toEnd){ return gameOver(); } // ゾーン通過し切り
       }
-    }catch(e){ console.error(e); }
+      lastInside=inside; lastAngle=ang;
+    }
     rafId=requestAnimationFrame(loop);
   }
 
-  // ====== ゲームロジック ======
+  // ========= ゲームロジック =========
   function setupInitial(){
     const center=Math.random()*FULL;
     zoneStart = norm(center - ZONE_SIZE/2);
-    frozenAngle = norm(center + Math.PI); // 真反対
+    frozenAngle = norm(center + Math.PI); // 針＝ゾーン中心の真反対
     lastInside=false; lastAngle=null;
   }
 
@@ -233,11 +247,11 @@
     const a=angleAt(now);
     const ok=inRange(a, zoneStart, norm(zoneStart+ZONE_SIZE));
     if(ok){
-      try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
+      playSuccess();                 // ★ Web Audio 再生（低ラグ）
       streak++;
-      baseAngle=a; baseTime=now;
+      baseAngle=a; baseTime=now;     // 内部基準を同期
       moveZoneAfterSuccess(a);
-      draw(a); // 即描画で切替ラグ体感軽減
+      draw(a);                       // 切替直後も即描画
     }else{
       gameOver();
     }
@@ -266,14 +280,12 @@
   }
 
   function startGame(){
-    try{
-      if(rafId) cancelAnimationFrame(rafId);
-      paused=false; streak=0;
-      setupInitial();
-      resizeCanvas();               // ★必ず一度描画
-      showCountdown();
-      rafId=requestAnimationFrame(loop);
-    }catch(e){ console.error(e); }
+    if(rafId) cancelAnimationFrame(rafId);
+    paused=false; streak=0;
+    setupInitial();
+    resizeCanvas();               // 初回描画
+    showCountdown();
+    rafId=requestAnimationFrame(loop);
   }
 
   function pauseGame(){
@@ -287,15 +299,15 @@
   }
 
   function gameOver(){
-    try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
+    playBomb();                   // ★ Web Audio 再生（低ラグ）
     phase='idle'; tapBtn.disabled=true;
     if(rafId) cancelAnimationFrame(rafId);
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
-  // ====== ランキング ======
-  const KEY='skillcheck_top5_stable_v1';
+  // ========= ランキング（ローカル TOP5） =========
+  const KEY='skillcheck_top5_webaudio_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){
     if(e.score<=0) return;
@@ -314,7 +326,7 @@
     });
   }
 
-  // ====== イベント（全部“確実に”有効化） ======
+  // ========= イベント =========
   startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
   pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
   rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
@@ -323,9 +335,8 @@
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
-  // ====== 初期化（必ず最後に一回描画） ======
+  // 初期
   renderRanking();
-  requestAnimationFrame(resizeCanvas);
 })();
 </script>
 </body>
