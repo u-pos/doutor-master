@@ -2,28 +2,34 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DBDスキルチェック：怒涛の嵐（真反対スタート／細枠／ゾーン半分）</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DBDスキルチェック：怒涛の嵐（修正版）</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  }
   .wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px}
   .board{width:100%;max-width:720px;aspect-ratio:1/1;position:relative}
-  canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
+  canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
     position:absolute;inset:0;display:none;align-items:center;justify-content:center;
     font-weight:900;font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);
+    z-index:2
   }
   .overlay.show{display:flex}
   .tap-row{width:100%;max-width:720px;margin-top:10px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
     font-weight:900;font-size:clamp(18px,5vw,28px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);
-    user-select:none;-webkit-tap-highlight-color:transparent
+    user-select:none;-webkit-tap-highlight-color:transparent; touch-action:manipulation; cursor:pointer;
   }
-  #tapBtn[disabled]{opacity:.45;filter:saturate(.4)}
+  #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
+
   .bottombar{margin-top:10px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px}
-  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer}
+  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
+    font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
   .btn.alt{background:#122031;border-color:#2a3f59}
 
@@ -72,16 +78,19 @@
 
 <script>
 (() => {
+  // ===== 設定 =====
   const CONFIG = {
-    baseRPM: 60,
+    baseRPM: 60,            // 固定速度
+    zoneArcRatio: 0.08,     // 白ゾーン角度幅（従来の半分）
     inputCooldownMs: 45,
-    nextZoneMinDeg: 180,
+    nextZoneMinDeg: 180,    // 成功後は成功角＋[180°,220°]に次ゾーン中心
     nextZoneMaxDeg: 220,
-    countdownMs: 1500
+    countdownMs: 1500       // Ready→GO 1.5s（停止中）
   };
 
+  // ===== 要素 =====
   const cv = document.getElementById('cv');
-  const ctx = cv.getContext('2d', { alpha: false, desynchronized: true });
+  const ctx = cv.getContext('2d', { alpha:false, desynchronized:true });
   const startBtn= document.getElementById('startBtn');
   const pauseBtn= document.getElementById('pauseBtn');
   const rankBtn = document.getElementById('rankBtn');
@@ -92,20 +101,24 @@
   const closeRank = document.getElementById('closeRank');
   const resetRank = document.getElementById('resetRank');
 
+  // ===== 状態 =====
   let running=false, paused=false;
-  let phase = 'idle';
+  let phase='idle'; // idle | countdown | play
   let lastInputAt=0;
   let streak=0;
 
+  // 幾何
   const FULL = Math.PI*2;
-  const zoneSize = FULL * 0.08;  // ★白ゾーン幅を半分に
+  const zoneSize = FULL * CONFIG.zoneArcRatio;
   const rpm = CONFIG.baseRPM;
 
-  let baseAngle=0, baseTime=0;
-  let frozenAngle=0;
-  let zoneStart=0;
-  let lastAngle=null, lastInside=false;
+  // 角度
+  let baseAngle=0, baseTime=0; // play用
+  let frozenAngle=0;           // countdown中の固定角
+  let zoneStart=0;             // 白ゾーン開始角
+  let lastAngle=null, lastInside=false; // 通過ミス監視
 
+  // DPR対応
   let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
     const rect = cv.getBoundingClientRect();
@@ -118,39 +131,43 @@
   }
   new ResizeObserver(resizeCanvas).observe(cv);
 
+  // オーディオ
   const successAudio = new Audio('success.mp3');
   const bombAudio    = new Audio('bomb.mp3');
-  [successAudio, bombAudio].forEach(a => { a.preload='auto'; a.volume=0.9; });
+  [successAudio, bombAudio].forEach(a=>{ a.preload='auto'; a.volume=0.9; });
+  // iOS double-tap/gesture 対策
+  ['gesturestart','gesturechange','gestureend'].forEach(ev=>{
+    window.addEventListener(ev, e=>{ e.preventDefault(); }, {passive:false});
+  });
 
+  // 角度ユーティリティ
   const norm = a => (a % FULL + FULL) % FULL;
   function angleAt(t){
     const rps = rpm / 60;
     const delta = (t - baseTime)/1000;
     return norm(baseAngle + rps * FULL * delta);
   }
-  function getCurrentAngle(t){
-    return (phase === 'play') ? angleAt(t) : frozenAngle;
-  }
-  const inRange = (a,s,e) => (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
-  const cwDelta = (from,to)=>(to-from+FULL)%FULL;
+  function getCurrentAngle(t){ return (phase==='play') ? angleAt(t) : frozenAngle; }
+  const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
+  const cwDelta = (from,to)=> (to - from + FULL) % FULL;
 
+  // 描画
   function draw(now, angle){
     const w = cssW, h = cssH;
-    const CX = w/2, CY = h/2;
+    const CX=w/2, CY=h/2;
     const rOuter = Math.min(w,h)*0.42;
 
     ctx.clearRect(0,0,w,h);
 
-    // 外枠グレーリング（2px）
+    // 外枠（2px）
     ctx.beginPath(); ctx.arc(CX, CY, rOuter, 0, FULL);
-    ctx.lineWidth = 2;                  // ★ここを2px
-    ctx.strokeStyle = '#1a2330'; ctx.stroke();
+    ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
     // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth = 24; ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX, CY, rOuter, zoneStart, zoneStart+zoneSize); ctx.stroke();
 
-    // 赤い針（半径より少し長め）
+    // 赤針（半径より少し長め：前1.2R／後0.2R）
     const front = rOuter * 1.2;
     const back  = rOuter * 0.2;
     ctx.save(); ctx.translate(CX, CY);
@@ -158,51 +175,160 @@
     ctx.beginPath();
     ctx.moveTo(0, back);
     ctx.lineTo(0, -front);
-    ctx.lineWidth = 6; ctx.strokeStyle = '#ef4444';
-    ctx.stroke();
+    ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
     ctx.restore();
   }
 
+  // ループ（playのみ通過ミス監視）
   function loop(now){
     if(!running) return;
     const ang = getCurrentAngle(now);
     draw(now, ang);
+
+    if(phase==='play' && !paused){
+      const zoneEnd = norm(zoneStart + zoneSize);
+      const inside = inRange(ang, zoneStart, zoneEnd);
+
+      if(lastAngle !== null){
+        if(lastInside && !inside){
+          const moved   = cwDelta(lastAngle, ang);
+          const toEnd   = cwDelta(lastAngle, zoneEnd);
+          if(moved >= toEnd){ return gameOver(); } // ゾーン通過し切り → ミス
+        }
+      }
+      lastAngle = ang;
+      lastInside = inside;
+    }
     requestAnimationFrame(loop);
   }
 
+  // 針＝ゾーン中心の真反対で停止させてカウントダウン
   function setupInitialZoneAndNeedle(){
     const zoneCenter = Math.random()*FULL;
-    zoneStart = norm(zoneCenter - zoneSize/2);
-    frozenAngle = norm(zoneCenter + Math.PI); // ★針＝ゾーン中心の真反対
+    zoneStart   = norm(zoneCenter - zoneSize/2);
+    frozenAngle = norm(zoneCenter + Math.PI); // ★長い先端がゾーンの反対側
     lastInside=false; lastAngle=null;
   }
 
+  // 成功後：次ゾーンを 180°〜220° 先に
+  function moveZoneAfterSuccess(successAngle){
+    const min = CONFIG.nextZoneMinDeg * Math.PI/180;
+    const max = CONFIG.nextZoneMaxDeg * Math.PI/180;
+    const offset = min + Math.random()*(max-min);
+    const center = norm(successAngle + offset);
+    zoneStart = norm(center - zoneSize/2);
+    lastInside=false; lastAngle=null;
+  }
+
+  // 入力
+  function onTap(){
+    if(phase!=='play' || paused) return;
+    const now = performance.now();
+    if(now - lastInputAt < CONFIG.inputCooldownMs) return;
+    lastInputAt = now;
+
+    const a = angleAt(now);
+    const ok = inRange(a, zoneStart, norm(zoneStart+zoneSize));
+    if(ok){
+      try{ successAudio.currentTime=0; successAudio.play().catch(()=>{});}catch{}
+      streak++;
+      baseAngle=a; baseTime=now;     // 見た目と内部を同期
+      moveZoneAfterSuccess(a);
+      draw(now, a);
+    }else{
+      gameOver();
+    }
+  }
+
+  // カウントダウン（針停止＆TAP無効）
+  function showCountdown(){
+    overlay.classList.add('show');
+    overlay.textContent='Ready';
+    tapBtn.disabled=true; phase='countdown';
+    const t0 = performance.now();
+    const mid = t0 + CONFIG.countdownMs*0.6;
+    const end = t0 + CONFIG.countdownMs;
+
+    function step(){
+      const now = performance.now();
+      if(now >= end){
+        overlay.classList.remove('show');
+        baseAngle=frozenAngle; baseTime=now; // GOで回転開始
+        phase='play'; tapBtn.disabled=false;
+        return;
+      }
+      if(now >= mid) overlay.textContent='GO!';
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // 制御
   function startGame(){
     resizeCanvas();
     running=true; paused=false; streak=0;
     setupInitialZoneAndNeedle();
-    const t0 = performance.now();
-    overlay.classList.add('show');
-    overlay.textContent = 'Ready';
-    tapBtn.disabled = true;
-    phase='countdown';
-    setTimeout(()=>{ overlay.textContent='GO!'; }, CONFIG.countdownMs*0.6);
-    setTimeout(()=>{
-      overlay.classList.remove('show');
-      baseAngle=frozenAngle; baseTime=performance.now();
-      phase='play'; tapBtn.disabled=false;
-    }, CONFIG.countdownMs);
+    showCountdown();
     requestAnimationFrame(loop);
   }
 
-  function pauseGame(){}
-
-  function gameOver(){
-    bombAudio.currentTime=0; bombAudio.play().catch(()=>{});
-    running=false; phase='idle'; tapBtn.disabled=true;
+  function pauseGame(){
+    if(phase!=='play') return;
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
+    if(!paused){
+      const now = performance.now();
+      const a = angleAt(now);
+      baseAngle=a; baseTime=now; draw(now,a);
+    }
   }
 
-  startBtn.addEventListener('click', startGame);
+  function stopGame(){
+    running=false; paused=false; phase='idle';
+    tapBtn.disabled=true; overlay.classList.remove('show');
+  }
+
+  function gameOver(){
+    try{ bombAudio.currentTime=0; bombAudio.play().catch(()=>{});}catch{}
+    stopGame();
+    saveScore({score:streak, at:Date.now()});
+    renderRanking();
+  }
+
+  // ランキング（ローカルTOP5：日付＋連続回数）
+  const KEY='skillcheck_top5_fixed_v3';
+  function loadScores(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} }
+  function saveScore(entry){
+    if(entry.score<=0) return;
+    const arr = loadScores(); arr.push(entry);
+    arr.sort((a,b)=> b.score - a.score || b.at - a.at);
+    localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5)));
+  }
+  function renderRanking(){
+    const arr = loadScores(); rankTbd.innerHTML='';
+    arr.forEach((e,i)=>{
+      const dt = new Date(e.at);
+      const d  = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
+      rankTbd.appendChild(tr);
+    });
+  }
+  function resetRanking(){ localStorage.removeItem(KEY); renderRanking(); }
+
+  // ===== イベント（全部有効化） =====
+  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
+  pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
+  rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); rankDlg.showModal(); }, {passive:false});
+  closeRank.addEventListener('click', (e)=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
+  resetRank.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('ランキングをリセットしますか？')) resetRanking(); }, {passive:false});
+
+  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
+  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
+
+  // 初期
+  renderRanking();
+  requestAnimationFrame(resizeCanvas);
 })();
 </script>
 </body>
