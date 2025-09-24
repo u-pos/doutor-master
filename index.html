@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>スキルチェックゲーム</title>
 <style>
-  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#7dd3fc; }
+  :root{ --bg:#0f1115; --fg:#eaeef2; --muted:#9aa4af; --accent:#7dd3fc; --pink:#f472b6; --green:#34d399; --amber:#fbbf24;}
   html,body{
     margin:0;height:100%;
     background:var(--bg);color:var(--fg);
@@ -27,14 +27,26 @@
 
   .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
   .board{width:100%;max-width:720px;position:relative;aspect-ratio:1/1}
-  canvas{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
+  canvas#cv{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;touch-action:none}
   .overlay{
     position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;
     font-weight:900;font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);
   }
   .overlay.show{display:flex}
 
-  .tap-row{width:100%;max-width:720px;margin-top:8px;display:flex;justify-content:center}
+  /* 初回メッセージ */
+  .welcome{
+    position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;z-index:3;
+    text-align:center;background:rgba(0,0,0,.25);
+  }
+  .welcome h2{
+    margin:0; font-size:clamp(24px,7vw,44px); font-weight:900; letter-spacing:.04em;
+    background:linear-gradient(180deg, #fff, #a7f3d0 60%, #6ee7b7);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 2px 20px rgba(110,231,183,.25);
+  }
+
+  .tap-row{width:100%;max-width:820px;margin-top:8px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,560px);height:72px;border-radius:16px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
     font-weight:900;font-size:clamp(18px,5vw,28px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);
@@ -42,12 +54,18 @@
   }
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
 
-  .bottombar{margin-top:6px;width:100%;max-width:720px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+  /* 下部ボタン：スタートを目立たせる */
+  .bottombar{margin-top:10px;width:100%;max-width:820px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
   .btn{
-    border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:12px;padding:10px 16px;
-    font-weight:800;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent
+    border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:14px;padding:12px 18px;
+    font-weight:900;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent
   }
-  .btn.warn{background:#3a2b12;border-color:#8a5a12;color:#fde68a}
+  #startBtn{
+    background:linear-gradient(180deg, #34d399, #10b981);
+    border-color:#065f46; color:#062e26;
+    box-shadow:0 10px 28px rgba(16,185,129,.35);
+    font-size:clamp(18px,5vw,22px); padding:14px 24px; letter-spacing:.04em;
+  }
   .btn.alt{background:#122031;border-color:#2a3f59}
 
   dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
@@ -56,6 +74,18 @@
   .rank-list{width:100%;border-collapse:collapse}
   .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
   .rank-list th{color:#aab4bf;font-weight:600}
+
+  /* 100達成演出（紙吹雪） */
+  .celebrate{
+    position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4;display:none;
+  }
+  .celebrate.show{display:block;}
+  .con{position:absolute; width:8px; height:14px; opacity:.9; border-radius:2px;
+       animation: fall linear forwards;}
+  @keyframes fall{
+    0%{ transform:translateY(-10vh) rotate(0deg); }
+    100%{ transform:translateY(110vh) rotate(720deg); }
+  }
 </style>
 </head>
 <body>
@@ -64,16 +94,27 @@
   <div class="wrap">
     <div class="board" id="board">
       <canvas id="cv"></canvas>
+
+      <!-- 初回メッセージ -->
+      <div id="welcome" class="welcome">
+        <h2>100連続目指して頑張って！</h2>
+      </div>
+
+      <!-- Ready/GO など -->
       <div id="overlay" class="overlay"></div>
+
+      <!-- 紙吹雪 -->
+      <div id="celebrate" class="celebrate"></div>
     </div>
 
     <div class="tap-row">
       <button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button>
     </div>
 
+    <!-- 下部：スタートを目立たせる／ミュート／ランキング -->
     <div class="bottombar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <button id="pauseBtn" class="btn warn">⏸ 一時停止</button>
+      <button id="muteBtn"  class="btn">🔊 ミュート</button>
       <button id="rankBtn"  class="btn alt">🏆 ランキング</button>
     </div>
   </div>
@@ -87,7 +128,6 @@
       </table>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
         <button id="closeRank" class="btn">閉じる</button>
-        <!-- リセットボタン削除済み -->
       </div>
     </div>
   </dialog>
@@ -97,27 +137,30 @@
   // ========= 設定 =========
   const CONFIG = {
     RPM: 60,                 // 一定速度
-    ZONE_RATIO: 0.14,        // ★白ゾーン角度幅（ここを調整して広げ/狭めできます）
+    ZONE_RATIO: 0.14,        // ★白ゾーン角度幅
     INPUT_CD_MS: 45,         // 誤爆防止
     NEXT_MIN_DEG: 180,       // 成功後：成功角 + [180°,220°] に次ゾーン中心
     NEXT_MAX_DEG: 220,
-    COUNTDOWN_MS: 1500       // Ready→GO（針は止める）
+    COUNTDOWN_MS: 1500,      // Ready→GO（針は止める）
+    TARGET_STREAK: 100       // ★100到達で祝う＆終了
   };
 
   // ========= 要素 =========
   const $ = (id) => document.getElementById(id);
-  const board = $('board'), cv = $('cv'), ctx = cv.getContext('2d', {alpha:false, desynchronized:true});
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), pauseBtn=$('pauseBtn'), rankBtn=$('rankBtn');
-  const overlay=$('overlay'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
+  const board=$('board'), cv=$('cv'), ctx=cv.getContext('2d', {alpha:false, desynchronized:true});
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), muteBtn=$('muteBtn'), rankBtn=$('rankBtn');
+  const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
   const closeRank=$('closeRank');
+  const celebrateBox=$('celebrate');
 
   // ========= 状態 =========
-  let phase='idle', paused=false, streak=0, lastInputAt=0, rafId=0;
-  const FULL = Math.PI*2, ZONE_SIZE = FULL*CONFIG.ZONE_RATIO;
+  let phase='idle', paused=false, streak=0, lastInputAt=0, rafId=0, isMuted=false;
+  const FULL=Math.PI*2;
+  const ZONE_SIZE=FULL*CONFIG.ZONE_RATIO;
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
 
-  // ========= レイアウト（aspect-ratio 非対応対策） =========
+  // ========= レイアウト =========
   let cssW=0, cssH=0, dpr=1;
   function ensureSquare(){
     const bw = board.clientWidth || board.getBoundingClientRect().width || 300;
@@ -135,64 +178,71 @@
   }
   window.addEventListener('resize', resizeCanvas);
   if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
-  requestAnimationFrame(resizeCanvas); // 初回必ず描画
+  requestAnimationFrame(resizeCanvas);
 
   // ========= Web Audio：事前デコード＋フォールバック =========
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let actx, bufSuccess=null, bufBomb=null, htmlSuccess, htmlBomb;
-
-  // HTMLAudio フォールバック（iOSの保険）
-  function setupHtmlAudio(){
-    htmlSuccess = new Audio('suc.mp3'); htmlSuccess.preload='auto'; htmlSuccess.playsInline = true;
-    htmlBomb    = new Audio('bomb.mp3');    htmlBomb.preload='auto';    htmlBomb.playsInline = true;
-    try{ htmlSuccess.volume=0.9; htmlBomb.volume=0.9; }catch{}
+  let actx, gMaster, buf = {success:null, bomb:null, ready:null, fanfare:null}, html={};
+  function setupHtmlFallback(){
+    ['success','bomb','ready','fanfare'].forEach(k=>{
+      const a = new Audio(`${k}.mp3`);
+      a.preload='auto'; a.playsInline = true;
+      try{ a.volume = 0.9; }catch{}
+      html[k]=a;
+    });
   }
-  setupHtmlAudio();
+  setupHtmlFallback();
 
   async function unlockAndWarmAudio() {
     try {
-      if (!actx) actx = new AudioCtx({ latencyHint: 'interactive' });
+      if (!actx) {
+        actx = new AudioCtx({ latencyHint: 'interactive' });
+        gMaster = actx.createGain();
+        gMaster.gain.value = 1.0;
+        gMaster.connect(actx.destination);
+      }
       if (actx.state === 'suspended') await actx.resume();
-      if (!bufSuccess) {
-        const res1 = await fetch('suc.mp3'); const ab1 = await res1.arrayBuffer();
-        bufSuccess = await actx.decodeAudioData(ab1);
-      }
-      if (!bufBomb) {
-        const res2 = await fetch('bomb.mp3'); const ab2 = await res2.arrayBuffer();
-        bufBomb = await actx.decodeAudioData(ab2);
-      }
+
+      // 並行ロード
+      await Promise.all(['success','bomb','ready','fanfare'].map(async k=>{
+        if (buf[k]) return;
+        const res = await fetch(`${k}.mp3`);
+        const ab = await res.arrayBuffer();
+        buf[k] = await actx.decodeAudioData(ab);
+      }));
     } catch(e) {
       console.warn('WebAudio warm failed', e);
     }
   }
-  function playBuffer(buf, gain=0.9){
+  function setMuted(m){
+    isMuted = m;
+    if (gMaster) gMaster.gain.value = isMuted ? 0 : 1;
+    Object.values(html).forEach(a=>{ a.muted = isMuted; });
+    muteBtn.textContent = isMuted ? '🔇 ミュート解除' : '🔊 ミュート';
+  }
+  function playBuf(key, gain=0.9){
     try{
-      if (!actx || !buf) return false;
+      if (!actx || !buf[key]) return false;
       const src = actx.createBufferSource();
       const g   = actx.createGain();
       g.gain.value = gain;
-      src.buffer = buf;
-      src.connect(g).connect(actx.destination);
+      src.buffer = buf[key];
+      src.connect(g).connect(gMaster || actx.destination);
       src.start(actx.currentTime);
       return true;
-    }catch(e){ console.warn('WebAudio play failed', e); return false; }
+    }catch(e){ console.warn('WebAudio play failed', key, e); return false; }
   }
-  async function playSuccess(){
-    if (!bufSuccess) { await unlockAndWarmAudio(); }
-    if (!playBuffer(bufSuccess, 0.9) && htmlSuccess){
-      try{ htmlSuccess.currentTime=0; await htmlSuccess.play(); }catch(e){}
+  async function playSE(key){
+    if (isMuted) return;
+    if (!buf[key]) { await unlockAndWarmAudio(); }
+    if (!playBuf(key, 0.9) && html[key]) {
+      try{ html[key].currentTime=0; await html[key].play(); }catch(e){}
     }
   }
-  async function playBomb(){
-    if (!bufBomb) { await unlockAndWarmAudio(); }
-    if (!playBuffer(bufBomb, 0.9) && htmlBomb){
-      try{ htmlBomb.currentTime=0; await htmlBomb.play(); }catch(e){}
-    }
-  }
-  // 初回ジェスチャで解放・事前デコード（スタートやTAPでOK）
+  // 初回ジェスチャで解放
   window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
 
-  // ========= iOS のズーム抑止 =========
+  // ========= iOSのズーム抑止 =========
   document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
   ['gesturestart','gesturechange','gestureend'].forEach(ev=> window.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
 
@@ -252,7 +302,6 @@
     frozenAngle = norm(center + Math.PI); // 針＝ゾーン中心の真反対
     lastInside=false; lastAngle=null;
   }
-
   function moveZoneAfterSuccess(successAngle){
     const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
     const nextCenter=norm(successAngle + (min + Math.random()*(max-min)));
@@ -269,11 +318,14 @@
     const a=angleAt(now);
     const ok=inRange(a, zoneStart, norm(zoneStart+ZONE_SIZE));
     if(ok){
-      await playSuccess();           // ★ 低ラグ再生（未ロードなら即フォールバック）
+      await playSE('success');
       streak++;
-      baseAngle=a; baseTime=now;     // 内部基準を同期
+      if(streak >= CONFIG.TARGET_STREAK){
+        return celebrateAndEnd(); // ★100達成
+      }
+      baseAngle=a; baseTime=now;   // 内部基準を同期
       moveZoneAfterSuccess(a);
-      draw(a);                       // 切替直後も即描画
+      draw(a);                     // 切替直後も即描画
     }else{
       gameOver();
     }
@@ -301,35 +353,66 @@
     requestAnimationFrame(tick);
   }
 
-  function startGame(){
+  async function startGame(){
+    // 初回メッセージを隠す
+    welcome.style.display='none';
+    await playSE('ready');           // ★スタート押下で ready.mp3 再生
     if(rafId) cancelAnimationFrame(rafId);
     paused=false; streak=0;
     setupInitial();
-    resizeCanvas();               // 初回描画
+    resizeCanvas();                  // 初回描画
     showCountdown();
     rafId=requestAnimationFrame(loop);
   }
 
-  function pauseGame(){
-    if(phase!=='play') return;
-    paused=!paused;
-    pauseBtn.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
-    if(!paused){
-      const now=performance.now(), a=angleAt(now);
-      baseAngle=a; baseTime=now; draw(a);
-    }
-  }
-
   async function gameOver(){
-    await playBomb();             // ★ 低ラグ再生（未ロードなら即フォールバック）
-    phase='idle'; tapBtn.disabled=true;
-    if(rafId) cancelAnimationFrame(rafId);
+    await playSE('bomb');
+    stopGame(true);
     saveScore({score:streak, at:Date.now()});
     renderRanking();
   }
 
-  // ========= ランキング（ローカル TOP5） =========
-  const KEY='skillcheck_top5_webaudio_v2';
+  function stopGame(keepOverlay){
+    phase='idle'; tapBtn.disabled=true;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(!keepOverlay) overlay.classList.remove('show');
+  }
+
+  // ========= 100達成：祝う演出＋強制終了 =========
+  async function celebrateAndEnd(){
+    stopGame(true);
+    await playSE('fanfare');
+
+    // 全画面メッセージ
+    overlay.textContent = 'おめでとう！100回達成だよ 🎉';
+    overlay.classList.add('show');
+
+    // 紙吹雪を簡易生成（200個）
+    runConfetti(200, 2800);
+    saveScore({score:streak, at:Date.now()});
+    renderRanking();
+  }
+
+  function runConfetti(n=150, dur=2500){
+    celebrateBox.innerHTML='';
+    celebrateBox.classList.add('show');
+    const colors=['#60a5fa','#f472b6','#34d399','#fbbf24','#c084fc','#fca5a5','#4ade80'];
+    const w=celebrateBox.clientWidth||window.innerWidth;
+    for(let i=0;i<n;i++){
+      const d=document.createElement('div');
+      d.className='con';
+      d.style.left = (Math.random()*w) + 'px';
+      d.style.background = colors[i%colors.length];
+      d.style.animationDuration = (1.8 + Math.random()*1.6) + 's';
+      d.style.animationDelay = (Math.random()*0.2) + 's';
+      d.style.transform = `translateY(-10vh) rotate(${Math.random()*360}deg)`;
+      celebrateBox.appendChild(d);
+    }
+    setTimeout(()=>{ celebrateBox.classList.remove('show'); celebrateBox.innerHTML=''; }, dur);
+  }
+
+  // ========= ランキング =========
+  const KEY='skillcheck_top5_goal100_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
   function saveScore(e){
     if(e.score<=0) return;
@@ -350,13 +433,14 @@
 
   // ========= イベント =========
   startBtn.addEventListener('click', (e)=>{ e.preventDefault(); startGame(); }, {passive:false});
-  pauseBtn.addEventListener('click', (e)=>{ e.preventDefault(); pauseGame(); }, {passive:false});
+  muteBtn .addEventListener('click', (e)=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
   rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
-  closeRank.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
+  closeRank?.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
   tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
   window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
 
   // 初期
+  setMuted(false);
   renderRanking();
 })();
 </script>
