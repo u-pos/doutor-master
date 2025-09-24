@@ -196,7 +196,6 @@
   }
 
   function pauseGame(){}
-
   function gameOver(){
     bombAudio.currentTime=0; bombAudio.play().catch(()=>{});
     running=false; phase='idle'; tapBtn.disabled=true;
