@@ -10,112 +10,46 @@
     margin:0;height:100%;
     background:var(--bg);color:var(--fg);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    /* スマホのスライド操作抑止 */
-    overscroll-behavior:none;
-    touch-action:none;           /* ページスクロール/スワイプ無効 */
-    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   }
-  header.title{
-    width:100%; display:flex; justify-content:center; align-items:center;
-    padding:14px 8px; margin:0;
-    background:linear-gradient(90deg, #0b1220, #0e1626);
-    border-bottom:1px solid #1f2b3a;
-  }
-  header.title h1{
-    margin:0; font-size:clamp(20px,5vw,28px); letter-spacing:.06em; font-weight:900;
-    background:linear-gradient(180deg, #eaf2ff, #9bd5ff 60%, #79c3ff);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 2px 18px rgba(125,211,252,.15);
-  }
-
+  header.title{width:100%;display:flex;justify-content:center;align-items:center;padding:14px 8px;margin:0;
+    background:linear-gradient(90deg,#0b1220,#0e1626);border-bottom:1px solid #1f2b3a}
+  header.title h1{margin:0;font-size:clamp(20px,5vw,28px);letter-spacing:.06em;font-weight:900;
+    background:linear-gradient(180deg,#eaf2ff,#9bd5ff 60%,#79c3ff);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 18px rgba(125,211,252,.15)}
   .wrap{min-height:calc(100dvh - 60px);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
   .board{width:100%;max-width:720px;position:relative;aspect-ratio:1/1}
-  canvas#cv{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13;}
-  .overlay{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;
-    font-weight:900;font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);
-    text-align:center;padding:12px;
-  }
+  #cv{width:100%;height:100%;display:block;border-radius:16px;background:#0b0e13}
+  .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
+    font-size:clamp(28px,8vw,56px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center;padding:12px}
   .overlay.show{display:flex}
-
-  /* 初回メッセ（中心より少し下） */
-  .welcome{
-    position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;z-index:2;
-    text-align:center;background:rgba(0,0,0,.25); transform:translateY(10%);
-  }
-  .welcome h2{
-    margin:0; font-size:clamp(24px,7vw,44px); font-weight:900; letter-spacing:.04em;
-    background:linear-gradient(180deg, #fff, #a7f3d0 60%, #6ee7b7);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 2px 20px rgba(110,231,183,.25);
-  }
-
-  /* TAPボタン（縦厚め） */
-  .tap-row{width:100%;max-width:820px;margin-top:8px;display:flex;justify-content:center}
-  #tapBtn{
-    width:min(92%,620px);
-    height:92px;               /* ★縦幅アップ */
-    border-radius:18px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
-    font-weight:900;font-size:clamp(20px,6vw,30px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);
-    -webkit-tap-highlight-color:transparent; cursor:pointer;
-  }
+  .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;z-index:2;
+    text-align:center;background:rgba(0,0,0,.25);transform:translateY(10%)}
+  .welcome h2{margin:0;font-size:clamp(24px,7vw,44px);font-weight:900;letter-spacing:.04em;
+    background:linear-gradient(180deg,#fff,#a7f3d0 60%,#6ee7b7);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 20px rgba(110,231,183,.25)}
+  .tap-row{width:100%;max-width:820px;margin-top:6px;display:flex;justify-content:center}
+  #tapBtn{width:min(92%,620px);height:92px;border-radius:18px;border:2px solid #334155;background:#0f131a;color:#e5e7eb;
+    font-weight:900;font-size:clamp(20px,6vw,30px);letter-spacing:1px;box-shadow:0 6px 18px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer}
   #tapBtn[disabled]{opacity:.45;filter:saturate(.4);cursor:not-allowed}
-
-  /* 下部ボタン：1列にスタート＋ミュート＋ランキング、解放後にその下へ迫害モード */
-  /* 下部ボタン：1列にスタート＋ミュート＋ランキング */
-.bar{
-  width:100%;
-  max-width:820px;
-  display:flex;
-  justify-content:center;
-  gap:8px;              /* ← 間隔少し詰める */
-  flex-wrap:nowrap;
-  margin-top:6px;       /* ← TAPボタンに近づける */
-}
-
-/* 迫害モード（解放後だけ表示） */
-#persecutionWrap{
-  width:100%;
-  max-width:820px;
-  display:flex;
-  justify-content:center;
-  margin-top:6px;       /* ← スタート行のすぐ下に */
-}
-
-  .btn{
-    border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:14px;padding:12px 18px;
-    font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent
-  }
-  #startBtn{
-    background:linear-gradient(180deg, #34d399, #10b981);
-    border-color:#065f46; color:#062e26;
-    box-shadow:0 10px 28px rgba(16,185,129,.35);
-    font-size:clamp(18px,5vw,22px); padding:14px 24px; letter-spacing:.04em;
-  }
-  .icon-btn{
-    width:56px; height:56px; padding:0; display:inline-flex; align-items:center; justify-content:center;
-    font-size:26px; border-radius:14px;
-  }
-  #persecutionBtn{
-    display:none; /* ★50達成で解放 */
-    background:linear-gradient(180deg,#f87171,#ef4444);
-    border-color:#7f1d1d; color:#1b0a0a;
-    box-shadow:0 10px 28px rgba(239,68,68,.35);
-    font-size:clamp(16px,4.5vw,20px); padding:12px 22px; border-radius:14px;
-  }
-
+  .bar{width:100%;max-width:820px;display:flex;justify-content:center;gap:8px;flex-wrap:nowrap;margin-top:4px} /* ← 上寄せ */
+  .btn{border:1px solid #26303a;background:#1f2937;color:var(--fg);border-radius:14px;padding:12px 18px;font-weight:900;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #startBtn{background:linear-gradient(180deg,#34d399,#10b981);border-color:#065f46;color:#062e26;box-shadow:0 10px 28px rgba(16,185,129,.35);
+    font-size:clamp(18px,5vw,22px);padding:14px 24px;letter-spacing:.04em}
+  .icon-btn{width:56px;height:56px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:26px;border-radius:14px}
+  #persecutionWrap{width:100%;max-width:820px;display:flex;justify-content:center;margin-top:4px} /* ← 上寄せ */
+  #persecutionBtn{display:none;background:linear-gradient(180deg,#f87171,#ef4444);border-color:#7f1d1d;color:#1b0a0a;
+    box-shadow:0 10px 28px rgba(239,68,68,.35);font-size:clamp(16px,4.5vw,20px);padding:12px 22px;border-radius:14px}
   dialog{border:none;border-radius:14px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
   .dlg-head{padding:14px 16px;border-bottom:1px solid #253040;font-weight:700}
   .dlg-body{padding:12px 16px}
   .rank-list{width:100%;border-collapse:collapse}
   .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
   .rank-list th{color:#aab4bf;font-weight:600}
-
-  /* 紙吹雪 */
-  .celebrate{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4;display:none;}
-  .celebrate.show{display:block;}
-  .con{position:absolute; width:8px; height:14px; opacity:.9; border-radius:2px; animation: fall linear forwards;}
-  @keyframes fall{ 0%{ transform:translateY(-10vh) rotate(0deg);} 100%{transform:translateY(110vh) rotate(720deg);} }
+  .celebrate{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4;display:none}
+  .celebrate.show{display:block}
+  .con{position:absolute;width:8px;height:14px;opacity:.9;border-radius:2px;animation:fall linear forwards}
+  @keyframes fall{0%{transform:translateY(-10vh) rotate(0deg)}100%{transform:translateY(110vh) rotate(720deg)}}
 </style>
 </head>
 <body>
@@ -124,53 +58,32 @@
   <div class="wrap">
     <div class="board" id="board">
       <canvas id="cv"></canvas>
-
-      <!-- 初回メッセ（中心より少し下） -->
-      <div id="welcome" class="welcome">
-        <h2>目指せ 50連続！</h2>
-      </div>
-
-      <!-- Ready/GO・お祝いメッセージ -->
+      <div id="welcome" class="welcome"><h2>目指せ 50連続！</h2></div>
       <div id="overlay" class="overlay"></div>
-
-      <!-- 紙吹雪 -->
       <div id="celebrate" class="celebrate"></div>
     </div>
 
-    <!-- TAP -->
-    <div class="tap-row">
-      <button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button>
-    </div>
+    <div class="tap-row"><button id="tapBtn" aria-label="Tap to stop" disabled>TAP</button></div>
 
-    <!-- スタート＋ミュート＋ランキング（横並び） -->
     <div class="bar">
       <button id="startBtn" class="btn">▶ スタート</button>
       <button id="muteBtn"  class="btn icon-btn" aria-label="ミュート切替">🔊</button>
       <button id="rankBtn"  class="btn icon-btn" aria-label="ランキング">🏆</button>
     </div>
-
-    <!-- 迫害モード（解放後だけ表示） -->
-    <div id="persecutionWrap">
-      <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
-    </div>
+    <div id="persecutionWrap"><button id="persecutionBtn" class="btn">⚠ 迫害モード</button></div>
   </div>
 
   <dialog id="rankDlg">
     <div class="dlg-head">🏆 オフライン TOP5</div>
     <div class="dlg-body">
-      <table class="rank-list" id="rankTable">
-        <thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-        <button id="closeRank" class="btn">閉じる</button>
-      </div>
+      <table class="rank-list" id="rankTable"><thead><tr><th>#</th><th>日付</th><th>連続回数</th></tr></thead><tbody></tbody></table>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button id="closeRank" class="btn">閉じる</button></div>
     </div>
   </dialog>
 
 <script>
 (() => {
-  // ========= 設定 =========
+  // ===== 設定 =====
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
@@ -179,129 +92,89 @@
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
     NORMAL_ZONE: 0.10,
-    PERSECUTE_ZONE: 0.07
+    PERSECUTE_ZONE: 0.07,
+    HIT_EPSILON_DEG: 1.5  // ← わずかな越えを許容（遅延吸収）
   };
 
-  // ========= 要素 =========
-  const $ = (id) => document.getElementById(id);
-  const board=$('board'), cv=$('cv'), ctx=cv.getContext('2d', {alpha:false, desynchronized:true});
+  // ===== 要素 =====
+  const $=(id)=>document.getElementById(id);
+  const board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
   const tapBtn=$('tapBtn'), startBtn=$('startBtn'), muteBtn=$('muteBtn'), rankBtn=$('rankBtn'), persecutionBtn=$('persecutionBtn');
   const overlay=$('overlay'), welcome=$('welcome'), rankDlg=$('rankDlg'), rankTbd=document.querySelector('#rankTable tbody');
-  const closeRank=$('closeRank');
-  const celebrateBox=$('celebrate');
+  const closeRank=$('closeRank'), celebrateBox=$('celebrate');
 
-  // ========= 状態 =========
+  // ===== 状態 =====
   let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false;
-  let mode='normal';
-  let currentZoneRatio = CONFIG.NORMAL_ZONE;
+  let mode='normal', currentZoneRatio=CONFIG.NORMAL_ZONE;
   const FULL=Math.PI*2;
-  const zoneSize = () => FULL * currentZoneRatio;
+  const zoneSize=()=>FULL*currentZoneRatio;
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
 
-  // ========= レイアウト =========
+  // ===== レイアウト =====
   let cssW=0, cssH=0, dpr=1;
-  function ensureSquare(){
-    const bw = board.clientWidth || board.getBoundingClientRect().width || 300;
-    board.style.height = bw + 'px';
-  }
+  function ensureSquare(){ const bw=board.clientWidth||board.getBoundingClientRect().width||300; board.style.height=bw+'px'; }
   function resizeCanvas(){
     ensureSquare();
-    const rect = cv.getBoundingClientRect();
-    dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    cssW = rect.width||300; cssH = rect.height||300;
-    cv.width  = Math.round(cssW * dpr);
-    cv.height = Math.round(cssH * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const rect=cv.getBoundingClientRect(); dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+    cssW=rect.width||300; cssH=rect.height||300;
+    cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
     draw(getCurrentAngle(performance.now()));
   }
   window.addEventListener('resize', resizeCanvas);
-  if (window.ResizeObserver) { try { new ResizeObserver(()=>resizeCanvas()).observe(board); } catch {} }
+  if(window.ResizeObserver){ try{ new ResizeObserver(()=>resizeCanvas()).observe(board);}catch{} }
   requestAnimationFrame(resizeCanvas);
 
-  // ========= スクロール抑止（iOS Safari含む） =========
-  document.addEventListener('touchmove', e=>{ e.preventDefault(); }, {passive:false});
-  document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
-  document.addEventListener('gesturechange', e=>e.preventDefault(), {passive:false});
-  document.addEventListener('gestureend', e=>e.preventDefault(), {passive:false});
-  document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
+  // ===== スクロール/ジェスチャ抑止 =====
+  document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
+  ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ========= Web Audio（事前デコード＋フォールバック） =========
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let actx, gMaster, buf = {success:null, bomb:null, ready:null, fanfare:null}, html={};
-  function setupHtmlFallback(){
-    ['success','bomb','ready','fanfare'].forEach(k=>{
-      const a = new Audio(`${k}.mp3`);
-      a.preload='auto'; a.playsInline = true;
-      try{ a.volume = 0.9; }catch{}
-      html[k]=a;
-    });
-  } setupHtmlFallback();
-
-  async function unlockAndWarmAudio() {
-    try {
-      if (!actx) { actx = new AudioCtx({ latencyHint: 'interactive' }); gMaster = actx.createGain(); gMaster.gain.value = 1.0; gMaster.connect(actx.destination); }
-      if (actx.state === 'suspended') await actx.resume();
-      await Promise.all(['success','bomb','ready','fanfare'].map(async k=>{
-        if (buf[k]) return;
-        const res = await fetch(`${k}.mp3`);
-        const ab = await res.arrayBuffer();
-        buf[k] = await actx.decodeAudioData(ab);
-      }));
-    } catch(e) { console.warn('WebAudio warm failed', e); }
+  // ===== WebAudio（事前デコード＋フォールバック） =====
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  let actx,gMaster,buf={success:null,bomb:null,ready:null,fanfare:null}, html={};
+  function setupHtmlFallback(){ ['success','bomb','ready','fanfare'].forEach(k=>{ const a=new Audio(`${k}.mp3`); a.preload='auto'; a.playsInline=true; try{a.volume=0.9;}catch{} html[k]=a; }); }
+  setupHtmlFallback();
+  async function unlockAndWarmAudio(){
+    try{
+      if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=1; gMaster.connect(actx.destination); }
+      if(actx.state==='suspended') await actx.resume();
+      await Promise.all(['success','bomb','ready','fanfare'].map(async k=>{ if(buf[k]) return; const res=await fetch(`${k}.mp3`); const ab=await res.arrayBuffer(); buf[k]=await actx.decodeAudioData(ab); }));
+    }catch(e){ console.warn('warm audio failed',e); }
   }
-  function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value = m ? 0 : 1; Object.values(html).forEach(a=>{ a.muted=m; }); muteBtn.textContent = m ? '🔇' : '🔊'; }
-  function playBuf(key,gain=0.9){ try{ if(!actx||!buf[key])return false; const s=actx.createBufferSource(), g=actx.createGain(); g.gain.value=gain; s.buffer=buf[key]; s.connect(g).connect(gMaster||actx.destination); s.start(actx.currentTime); return true;}catch(e){return false;} }
-  async function playSE(key){ if(isMuted) return; if(!buf[key]) await unlockAndWarmAudio(); if(!playBuf(key,0.9) && html[key]){ try{ html[key].currentTime=0; await html[key].play(); }catch{} } }
-  window.addEventListener('pointerdown', () => { unlockAndWarmAudio(); }, { once:true });
+  function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
+  function playBuf(key,gain=0.9){ try{ if(!actx||!buf[key]) return false; const s=actx.createBufferSource(), g=actx.createGain(); g.gain.value=gain; s.buffer=buf[key]; s.connect(g).connect(gMaster||actx.destination); s.start(actx.currentTime); return true; }catch{ return false; } }
+  async function playSE(key){ if(isMuted) return; if(!buf[key]) await unlockAndWarmAudio(); if(!playBuf(key,0.9)&&html[key]){ try{ html[key].currentTime=0; await html[key].play(); }catch{} } }
+  window.addEventListener('pointerdown',()=>unlockAndWarmAudio(),{once:true});
 
-  // ========= 角度 & 描画 =========
-  const norm = a => (a % FULL + FULL) % FULL;
-  const inRange = (a,s,e)=> (s<=e) ? (a>=s && a<=e) : (a>=s || a<=e);
-  const cwDelta = (from,to)=> (to - from + FULL) % FULL;
-  const angleAt = (t) => { const rps = CONFIG.RPM/60; const delta=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*delta); };
-  const getCurrentAngle = (t) => (phase==='play') ? angleAt(t) : frozenAngle;
+  // ===== 角度/描画 =====
+  const norm=a=>(a%FULL+FULL)%FULL;
+  const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
+  const cwDelta=(from,to)=>(to-from+FULL)%FULL;
+  const angleAt=(t)=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle+rps*FULL*d); };
+  const getCurrentAngle=(t)=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
-    const w=cssW, h=cssH, CX=w/2, CY=h/2, r=Math.min(w,h)*0.42, ZS=zoneSize();
+    const w=cssW,h=cssH,CX=w/2,CY=h/2,r=Math.min(w,h)*0.42,ZS=zoneSize();
     ctx.clearRect(0,0,w,h);
-
-    // 外枠
-    ctx.beginPath(); ctx.arc(CX, CY, r, 0, FULL);
-    ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
-
-    // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
-    ctx.arc(CX, CY, r, zoneStart, zoneStart+ZS); ctx.stroke();
-
-    // 赤針
-    const front=r*1.2, back=r*0.2;
-    const fx=CX+front*Math.cos(angle), fy=CY+front*Math.sin(angle);
-    const bx=CX-back *Math.cos(angle), by=CY-back *Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(fx,fy);
-    ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
-
-    // コンボ数字（中心より少し上）
-    const combo = String(streak);
-    ctx.save();
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.font=`900 ${Math.max(18, Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
-    ctx.lineWidth = Math.max(2, Math.round(r*0.04));
-    ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo, CX, CY - r*0.18);
-    ctx.fillStyle='#eaeef2'; ctx.fillText(combo, CX, CY - r*0.18);
-    ctx.restore();
+    ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff'; ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
+    const front=r*1.2,back=r*0.2;
+    const fx=CX+front*Math.cos(angle),fy=CY+front*Math.sin(angle);
+    const bx=CX-back*Math.cos(angle),by=CY-back*Math.sin(angle);
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(fx,fy); ctx.lineWidth=6; ctx.strokeStyle='#ef4444'; ctx.stroke();
+    const combo=String(streak);
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
+    ctx.lineWidth=Math.max(2,Math.round(r*0.04)); ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo,CX,CY-r*0.18);
+    ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18); ctx.restore();
   }
 
-  // ========= ループ =========
   function loop(now){
-    const ang=getCurrentAngle(now);
-    draw(ang);
-
+    const ang=getCurrentAngle(now); draw(ang);
     if(phase==='play'){
-      const ZS=zoneSize(), zoneEnd=norm(zoneStart+ZS);
-      const inside=inRange(ang, zoneStart, zoneEnd);
+      const ZS=zoneSize(), end=norm(zoneStart+ZS), inside=inRange(ang,zoneStart,end);
       if(lastAngle!==null && lastInside && !inside){
-        const moved=cwDelta(lastAngle, ang), toEnd=cwDelta(lastAngle, zoneEnd);
+        const moved=cwDelta(lastAngle,ang), toEnd=cwDelta(lastAngle,end);
         if(moved>=toEnd){ return gameOver(); }
       }
       lastInside=inside; lastAngle=ang;
@@ -309,37 +182,40 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ========= ロジック =========
+  // ===== 判定の時刻補正 =====
+  function tapTimestamp(e){
+    const ts=(e && typeof e.timeStamp==='number')?e.timeStamp:performance.now();
+    return (Math.abs(ts-performance.now())<10000)?ts:performance.now();
+  }
+
+  // ===== ロジック =====
   function setupInitial(){
     const center=Math.random()*FULL, ZS=zoneSize();
-    zoneStart = norm(center - ZS/2);
-    frozenAngle = norm(center + Math.PI);
+    zoneStart=norm(center - ZS/2); frozenAngle=norm(center + Math.PI);
     lastInside=false; lastAngle=null;
   }
   function moveZoneAfterSuccess(successAngle){
     const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
     const nextCenter=norm(successAngle + (min + Math.random()*(max-min)));
-    const ZS=zoneSize();
-    zoneStart=norm(nextCenter - ZS/2);
+    const ZS=zoneSize(); zoneStart=norm(nextCenter - ZS/2);
     lastInside=false; lastAngle=null;
   }
 
-  async function onTap(){
+  async function onTap(e){
     if(phase!=='play') return;
-    const now=performance.now();
+    const now=tapTimestamp(e);
     if(now-lastInputAt<CONFIG.INPUT_CD_MS) return;
     lastInputAt=now;
 
-    const a=angleAt(now), ZS=zoneSize();
-    const ok=inRange(a, zoneStart, norm(zoneStart+ZS));
+    const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
+    const HIT_EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180;
+    const ok = inRange(a,zoneStart,end) || cwDelta(end,a) <= HIT_EPS;
+
     if(ok){
-      await playSE('success');
-      streak++;
-      if(streak >= CONFIG.TARGET_STREAK){ return celebrateAndUnlock(); }
+      await playSE('success'); streak++;
+      if(streak>=CONFIG.TARGET_STREAK) return celebrateAndUnlock();
       baseAngle=a; baseTime=now; moveZoneAfterSuccess(a); draw(a);
-    }else{
-      gameOver();
-    }
+    }else{ gameOver(); }
   }
 
   function showCountdown(){
@@ -349,99 +225,60 @@
     const tick=()=>{
       const now=performance.now();
       if(now>=end){
-        overlay.classList.remove('show');
-        baseAngle=frozenAngle; baseTime=now;
+        overlay.classList.remove('show'); baseAngle=frozenAngle; baseTime=now;
         phase='play'; tapBtn.disabled=false;
-        const ang=angleAt(now), ZS=zoneSize();
-        lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZS));
+        const ang=angleAt(now), ZS=zoneSize(); lastAngle=ang; lastInside=inRange(ang,zoneStart,norm(zoneStart+ZS));
         return;
       }
-      if(now>=mid) overlay.textContent='GO!';
-      requestAnimationFrame(tick);
+      if(now>=mid) overlay.textContent='GO!'; requestAnimationFrame(tick);
     }; requestAnimationFrame(tick);
   }
 
   async function startGame(){
-    welcome.style.display='none';
-    await playSE('ready');
+    welcome.style.display='none'; await playSE('ready');
     if(rafId) cancelAnimationFrame(rafId);
-    streak=0; setupInitial(); resizeCanvas(); showCountdown();
-    rafId=requestAnimationFrame(loop);
+    streak=0; setupInitial(); resizeCanvas(); showCountdown(); rafId=requestAnimationFrame(loop);
   }
+  async function gameOver(){ await playSE('bomb'); stopGame(true); saveScore({score:streak,at:Date.now()}); renderRanking(); }
+  function stopGame(keepOverlay){ phase='idle'; tapBtn.disabled=true; if(rafId) cancelAnimationFrame(rafId); if(!keepOverlay) overlay.classList.remove('show'); }
 
-  async function gameOver(){
-    await playSE('bomb');
-    stopGame(true);
-    saveScore({score:streak, at:Date.now()}); renderRanking();
-  }
-
-  function stopGame(keepOverlay){
-    phase='idle'; tapBtn.disabled=true;
-    if(rafId) cancelAnimationFrame(rafId);
-    if(!keepOverlay) overlay.classList.remove('show');
-  }
-
-  // ========= 50達成：解放 =========
   async function celebrateAndUnlock(){
-    stopGame(true);
-    await playSE('fanfare');
-    overlay.innerHTML = 'おめでとう！50回達成だよ 🎉<br>迫害モード解放！';
-    overlay.classList.add('show');
-    runConfetti(220, 3000);
+    stopGame(true); await playSE('fanfare');
+    overlay.innerHTML='おめでとう！50回達成だよ 🎉<br>迫害モード解放！'; overlay.classList.add('show'); runConfetti(220,3000);
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    showPersecutionButton(true);
-    saveScore({score:streak, at:Date.now()}); renderRanking();
+    showPersecutionButton(true); saveScore({score:streak,at:Date.now()}); renderRanking();
   }
-
-  function runConfetti(n=200, dur=2800){
+  function runConfetti(n=200,dur=2800){
     celebrateBox.innerHTML=''; celebrateBox.classList.add('show');
-    const colors=['#60a5fa','#f472b6','#34d399','#fbbf24','#c084fc','#fca5a5','#4ade80'];
-    const w=celebrateBox.clientWidth||window.innerWidth;
-    for(let i=0;i<n;i++){
-      const d=document.createElement('div'); d.className='con';
-      d.style.left=(Math.random()*w)+'px';
-      d.style.background=colors[i%colors.length];
-      d.style.animationDuration=(1.8+Math.random()*1.6)+'s';
-      d.style.animationDelay=(Math.random()*0.2)+'s';
-      d.style.transform=`translateY(-10vh) rotate(${Math.random()*360}deg)`;
-      celebrateBox.appendChild(d);
-    }
+    const colors=['#60a5fa','#f472b6','#34d399','#fbbf24','#c084fc','#fca5a5','#4ade80'], w=celebrateBox.clientWidth||window.innerWidth;
+    for(let i=0;i<n;i++){ const d=document.createElement('div'); d.className='con'; d.style.left=(Math.random()*w)+'px';
+      d.style.background=colors[i%colors.length]; d.style.animationDuration=(1.8+Math.random()*1.6)+'s'; d.style.animationDelay=(Math.random()*0.2)+'s';
+      d.style.transform=`translateY(-10vh) rotate(${Math.random()*360}deg)`; celebrateBox.appendChild(d);}
     setTimeout(()=>{ celebrateBox.classList.remove('show'); celebrateBox.innerHTML=''; }, dur);
   }
 
-  // ========= ランキング =========
-  const KEY='skillcheck_top5_goal50_layout_v1';
+  // ===== ランキング =====
+  const KEY='skillcheck_top5_goal50_layout_eps_v1';
   const loadScores=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{return []} };
-  function saveScore(e){ if(e.score<=0) return; const arr=loadScores(); arr.push(e); arr.sort((a,b)=> b.score-a.score || b.at-a.at); localStorage.setItem(KEY, JSON.stringify(arr.slice(0,5))); }
-  function renderRanking(){
-    const arr=loadScores(); rankTbd.innerHTML='';
-    arr.forEach((e,i)=>{
-      const dt=new Date(e.at);
-      const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-      const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`;
-      rankTbd.appendChild(tr);
-    });
-  }
+  function saveScore(e){ if(e.score<=0) return; const arr=loadScores(); arr.push(e); arr.sort((a,b)=>b.score-a.score||b.at-a.at); localStorage.setItem(KEY,JSON.stringify(arr.slice(0,5))); }
+  function renderRanking(){ const arr=loadScores(); rankTbd.innerHTML=''; arr.forEach((e,i)=>{ const dt=new Date(e.at); const d=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${d}</td><td>${e.score}</td>`; rankTbd.appendChild(tr); }); }
 
-  // ========= UI：迫害モード =========
-  function showPersecutionButton(show){ persecutionBtn.style.display = show ? 'inline-block' : 'none'; }
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution') === '1'; }catch{ return false; } }
+  // ===== UI：迫害モード =====
+  function showPersecutionButton(show){ persecutionBtn.style.display=show?'inline-block':'none'; }
+  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
   function activateMode(newMode){
-    mode=newMode; currentZoneRatio = (mode==='persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
-    overlay.textContent = (mode==='persecution') ? '迫害モード：激ムズ！' : '通常モード';
-    overlay.classList.add('show'); setTimeout(()=> overlay.classList.remove('show'), 900);
+    mode=newMode; currentZoneRatio=(mode==='persecution')?CONFIG.PERSECUTE_ZONE:CONFIG.NORMAL_ZONE;
+    overlay.textContent=(mode==='persecution')?'迫害モード：激ムズ！':'通常モード'; overlay.classList.add('show'); setTimeout(()=>overlay.classList.remove('show'),900);
   }
 
-  // ========= イベント =========
-  startBtn.addEventListener('click', (e)=>{ e.preventDefault(); activateMode('normal'); startGame(); }, {passive:false});
-  persecutionBtn.addEventListener('click', (e)=>{ e.preventDefault(); activateMode('persecution'); startGame(); }, {passive:false});
-  muteBtn .addEventListener('click', (e)=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
-  rankBtn .addEventListener('click', (e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } }, {passive:false});
-  closeRank?.addEventListener('click', (e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } }, {passive:false});
-
-  // TAP（pointerdownのみ使用）
-  tapBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); onTap(); }, {passive:false});
-  window.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(); } });
+  // ===== イベント =====
+  startBtn.addEventListener('click',(e)=>{ e.preventDefault(); activateMode('normal'); startGame(); },{passive:false});
+  persecutionBtn.addEventListener('click',(e)=>{ e.preventDefault(); activateMode('persecution'); startGame(); },{passive:false});
+  muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); setMuted(!isMuted); },{passive:false});
+  rankBtn.addEventListener('click',(e)=>{ e.preventDefault(); renderRanking(); if(rankDlg?.showModal){ rankDlg.showModal(); } },{passive:false});
+  closeRank?.addEventListener('click',(e)=>{ e.preventDefault(); if(rankDlg?.close){ rankDlg.close(); } },{passive:false});
+  tapBtn.addEventListener('pointerdown',(e)=>{ e.preventDefault(); onTap(e); },{passive:false});
+  window.addEventListener('keydown',(e)=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
 
   // 初期
   setMuted(false); renderRanking(); showPersecutionButton(isUnlocked());
