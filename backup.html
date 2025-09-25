@@ -188,8 +188,15 @@
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
     // 赤い針（直線・短い側0）
     const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
-    ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
+  if (phase !== 'explosion' && (phase === 'play' || showInitialNeedle)) {
+  // 赤い針の描画コード（既存と同じ）
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(CX + r*1.2 * Math.cos(angle), CY + r*1.2 * Math.sin(angle));
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#ef4444';
+  ctx.stroke();
+}
     // コンボ（中心より少し上）
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -227,6 +234,7 @@
     frozenAngle = norm(center + Math.PI);
     lastInside=false; lastAngle=null;
     resizeCanvas(); // 初回に確実に描画
+    let showInitialNeedle = true;
   }
   function moveZoneAfterSuccess(a){
     const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
@@ -283,6 +291,17 @@
     playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
     streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
+ 
+function startGame(which) {
+  mode = which;
+  currentZoneRatio = (mode === 'persecution') ? CONFIG.PERSECUTE_ZONE : CONFIG.NORMAL_ZONE;
+  welcome.style.display = 'none';
+  showInitialNeedle = false;   // ← ここで初期針を消す
+  playSE('ready'); unlockAndWarmAudio();
+  if (rafId) cancelAnimationFrame(rafId);
+  streak = 0; setupInitial(); showCountdown(); rafId = requestAnimationFrame(loop);
+}
+
   }
 
   function gameOver(){
