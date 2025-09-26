@@ -124,6 +124,8 @@
   const zoneSize=()=>FULL*currentZoneRatio;
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
+  // 針の表示制御：初期は非表示（ここが今回のポイント）
+  let showNeedle=false;
 
   // ===== 画面高フィット（ボタンが隠れない） =====
   function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
@@ -186,10 +188,12 @@
     // 白ゾーン
     ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
-    // 赤い針（直線・短い側0）
-    const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
-    ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
+    // 赤い針（開始までは非表示）
+    if(showNeedle){
+      const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
+      ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
+      ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
+    }
     // コンボ（中心より少し上）
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -259,6 +263,9 @@
   function showCountdown(){
     overlay.classList.add('show'); overlay.textContent='Ready';
     tapBtn.disabled=true; phase='countdown';
+    // カウントダウン中は針非表示
+    showNeedle=false; draw(frozenAngle);
+
     const t0=performance.now(), mid=t0+CONFIG.COUNTDOWN_MS*0.6, end=t0+CONFIG.COUNTDOWN_MS;
     const tick=()=>{
       const now=performance.now();
@@ -266,6 +273,8 @@
         overlay.classList.remove('show');
         baseAngle=frozenAngle; baseTime=now;
         phase='play'; tapBtn.disabled=false;
+        // プレイ開始の瞬間に針を表示
+        showNeedle=true;
         const ang=angleAt(now), ZS=zoneSize();
         lastAngle=ang; lastInside=inRange(ang, zoneStart, norm(zoneStart+ZS));
         return;
@@ -282,7 +291,12 @@
     welcome.style.display='none';
     playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
-    streak=0; setupInitial(); showCountdown(); rafId=requestAnimationFrame(loop);
+    streak=0;
+    // スタート押した瞬間に針を消す（初期位置を見せない）
+    showNeedle=false;
+    setupInitial();
+    showCountdown();
+    rafId=requestAnimationFrame(loop);
   }
 
   function gameOver(){
@@ -294,8 +308,12 @@
 
   function stopGame(keepOverlay){
     phase='idle'; tapBtn.disabled=true;
+    // 停止時は針を非表示
+    showNeedle=false;
     if(rafId) cancelAnimationFrame(rafId);
     if(!keepOverlay) overlay.classList.remove('show');
+    // 再描画して針を消した状態を反映
+    draw(frozenAngle);
   }
 
   function celebrateAndUnlock(){
@@ -356,9 +374,8 @@
   // ===== 初期化 =====
   setMuted(false);
   updateUnlockVisibility();
-  // 初期描画も安全に
+  // 初期描画（針は非表示のまま）
   requestAnimationFrame(()=>{ resizeCanvas(); });
-
 })();
 </script>
 </body>
