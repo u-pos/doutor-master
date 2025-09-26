@@ -38,7 +38,7 @@
 
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
-  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;color:#c8ffe0}
+  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;color:#c8ffe0;transform: translateY(30%); /* ★下へ移動 */}
 
   /* TAPを少し上へ、下に少し余白 */
   .tap-row{width:100%;max-width:820px;margin-top:2px;display:flex;justify-content:center}
@@ -339,9 +339,8 @@
     playSE('fanfare');
     /* ここをご指定の3段表示＆赤字に */
     overlay.innerHTML =
-      'おめでとう！<br>' +
-      '50回達成だよ 🎉<br><br>' +
-      '<span class="unlock-red">迫害モードが解放されました</span>';
+      '50回達成おめでとう🎉<br><br><br>' +
+      '迫害モードが解放されました';
     overlay.classList.add('show');
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
     updateUnlockVisibility();
