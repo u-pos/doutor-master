@@ -32,17 +32,13 @@
     font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center}
   .overlay.show{display:flex}
   /* Ready/GO を少し下へ */
-  .overlay .ovtxt{ display:inline-block; transform: translateY(12%); }
+  .overlay .ovtxt{ display:inline-block; transform: translateY(8%); }
+  /* 50回達成の最後の行を赤で */
+  .overlay .unlock-red{ color:#ff4d4d; }
 
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
- .welcome h2 {
-  margin:0;
-  font-size:clamp(22px,6.6vw,40px);
-  font-weight:900;
-  color:#c8ffe0;
-  transform: translateY(-30%); /* ★上へ移動 */
-}
+  .welcome h2{margin:0;font-size:clamp(22px,6.6vw,40px);font-weight:900;color:#c8ffe0}
 
   /* TAPを少し上へ、下に少し余白 */
   .tap-row{width:100%;max-width:820px;margin-top:2px;display:flex;justify-content:center}
@@ -62,20 +58,16 @@
     justify-content:center;
     align-items:stretch;
   }
- .btn{
-  border:1px solid #26303a;
-  background:#1f2937;
-  color:#fff;
-  border-radius:10px;
-  padding:10px 12px;   /* 高さも少し調整 */
-  font-weight:900;
-  font-size:clamp(16px, 5vw, 24px); /* ★これを追加 */
-  cursor:pointer;
-  width:100%;
-}
+  /* 余白をややコンパクトに（縦方向の余白を減らす） */
+  .btn{
+    border:1px solid #26303a;background:#1f2937;color:#fff;border-radius:12px;
+    padding:10px 12px; /* ← 縦の余白を少なめに */
+    font-weight:900;font-size:clamp(18px,5vw,24px);
+    cursor:pointer;width:100%;
+  }
   #startBtn{background:#10b981;border-color:#065f46;color:#062e26}
 
-  #persecutionBtn{display:none;background:#ef4444;color:#fff;border-radius:12px;padding:12px 16px}
+  #persecutionBtn{display:none;background:#ef4444;color:#fff;border-radius:12px;padding:10px 12px}
   #rankPerBtn{display:none}
 
   dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
@@ -100,13 +92,15 @@
     <!-- スタート＋ランキング（通常） -->
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <button id="rankNormalBtn" class="btn">ランキング（通常）</button>
+      <!-- 表示をトロフィーアイコン（通常）に変更 -->
+      <button id="rankNormalBtn" class="btn">🏆（通常）</button>
     </div>
 
     <!-- 迫害モード＋ランキング（迫害） -->
     <div id="persecutionWrap">
       <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
-      <button id="rankPerBtn" class="btn">ランキング（迫害）</button>
+      <!-- 表示をトロフィーアイコン（迫害）に変更 -->
+      <button id="rankPerBtn" class="btn">🏆（迫害）</button>
     </div>
   </div>
 
@@ -343,7 +337,11 @@
   function celebrateAndUnlock(){
     stopGame(true);
     playSE('fanfare');
-    overlay.innerHTML='おめでとう！50回達成だよ 🎉<br>迫害モード解放！';
+    /* ここをご指定の3段表示＆赤字に */
+    overlay.innerHTML =
+      'おめでとう！<br>' +
+      '50回達成だよ 🎉<br><br>' +
+      '<span class="unlock-red">迫害モードが解放されました</span>';
     overlay.classList.add('show');
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
     updateUnlockVisibility();
