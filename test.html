@@ -39,7 +39,10 @@
 }
 
   /* 50回達成の最後の行を赤で */
-  .overlay .unlock-red{ color:#ff4d4d; }
+.overlay .unlock-red,
+.overlay .ovtxt .unlock-red {
+  color: #ff4d4d !important;
+}
 
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
