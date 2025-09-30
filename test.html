@@ -16,7 +16,7 @@
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
 
-  /* 50達成の最後の行を赤で */
+  /* 祝メッセージの最後の行を赤で */
   .overlay .unlock-red{ color:#ff4d4d !important; }
 
   .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px 2px}
@@ -88,12 +88,14 @@
 
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <button id="rankNormalBtn" class="btn">🏆（通常）</button>
+      <!-- （）削除 -->
+      <button id="rankNormalBtn" class="btn">🏆 通常</button>
     </div>
 
     <div id="persecutionWrap">
+      <!-- （）削除 -->
       <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
-      <button id="rankPerBtn" class="btn">🏆（迫害）</button>
+      <button id="rankPerBtn" class="btn">🏆 迫害</button>
     </div>
   </div>
 
@@ -116,9 +118,9 @@
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    // ★成功ゾーン（角幅)
-    NORMAL_ZONE: 0.09,   
-    PERSECUTE_ZONE: 0.05, 
+    // 成功ゾーン（角幅の比率）←「前の広さ」に戻す
+    NORMAL_ZONE: 0.10,
+    PERSECUTE_ZONE: 0.06,
 
     // ラグ救済（おまけ）1度
     HIT_EPSILON_DEG: 1,
@@ -145,13 +147,10 @@
   let lastAngle=null, lastInside=false;
   let showNeedle=false;
 
-  // 50到達演出は一度だけ
-  let milestoneShown=false;
-
-  // レイアウト用（円の半径など記録）
+  // レイアウト記録
   let lastRadius=0, lastZoneLineWidth=24*CONFIG.DRAW_SCALE;
 
-  // ===== 画面高フィット =====
+  // ===== レイアウト =====
   function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
   function fitBoardToViewport(){
     const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
@@ -169,7 +168,7 @@
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     draw(getCurrentAngle(performance.now()));
-    placeWelcomeBetweenCircleAndTap(); // ウェルカムを円とTAPの間に
+    placeWelcomeBetweenCircleAndTap(); // ウェルカムを円とTAPの間へ
   }
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('orientationchange', resizeCanvas);
@@ -241,7 +240,7 @@
 
   // ===== オーバーレイ／ウェルカムの位置（円とTAPの間） =====
   function placeOverlayBelowCircle(ov){
-    const margin = 22; // 下げ幅は好みで微調整OK
+    const margin = 22; // 下げ幅の微調整はここ
     const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
     ov.style.transform = `translateY(${dy}px)`;
   }
@@ -278,7 +277,6 @@
     const center=Math.random()*FULL, ZS=zoneSize();
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI);
-    milestoneShown=false;
     lastInside=false; lastAngle=null;
     resizeCanvas();
   }
@@ -304,12 +302,7 @@
       playSE('success');
       streak++;
 
-      // 50到達：継続（非ブロッキング表示 & アンロック）
-      if(!milestoneShown && streak >= CONFIG.TARGET_STREAK){
-        milestoneShown = true;
-        celebrateMilestoneNonBlocking();
-      }
-
+      // ★ 50到達時は何もしない（継続）。お祝いはミス時に出す！
       baseAngle=a; baseTime=now;
       moveZoneAfterSuccess(a);
       draw(a);
@@ -318,13 +311,13 @@
     }
   }
 
-  // Ready/GO も円とTAPの間へ
+  // Ready/GO を円とTAPの間に表示
   function showCountdown(){
     overlay.classList.add('show');
     const el = overlay.querySelector('.ovtxt');
     el.style.color = 'yellow';
     el.textContent = 'Ready';
-    placeOverlayBelowCircle(el);      // ★ 位置調整
+    placeOverlayBelowCircle(el);
 
     tapBtn.disabled=true; phase='countdown';
     showNeedle=false; draw(frozenAngle);
@@ -344,7 +337,7 @@
       }
       if(now>=mid){
         el.textContent='GO!';
-        placeOverlayBelowCircle(el);  // ★ 位置維持
+        placeOverlayBelowCircle(el);
       }
       requestAnimationFrame(tick);
     };
@@ -364,37 +357,33 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ★ 50達成：ゲームを止めずに表示だけ出して自動で消す（円とTAPの間）
-  function celebrateMilestoneNonBlocking(){
-    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    updateUnlockVisibility();
-
-    const el = overlay.querySelector('.ovtxt');
-    el.innerHTML =
-      '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
-      '<span class="unlock-red">迫害モードが解放されました</span>';
-    overlay.classList.add('show');
-    placeOverlayBelowCircle(el);
-    playSE('fanfare');
-
-    setTimeout(()=>{
-      overlay.classList.remove('show');
-      el.textContent='';
-    }, 2400);
-  }
-
+  // ===== ゲームオーバー（ここで祝演出を条件分岐） =====
   function gameOver(){
-    playSE('bomb');
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
     updateUnlockVisibility();
 
-    // ★ GAMEOVER を「目指せ50連続！」と同じ位置（円とTAPの間）に白で表示
     const el = overlay.querySelector('.ovtxt');
-    el.style.color = '#ffffff';
-    el.textContent = 'GAMEOVER';
-    overlay.classList.add('show');
-    placeOverlayBelowCircle(el);
+
+    if(streak >= CONFIG.TARGET_STREAK){
+      // ★ 50回以上続けたあとにミス → 祝メッセージ＆音
+      el.innerHTML =
+        '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
+        '<span class="unlock-red">迫害モードが解放されました</span>';
+      overlay.classList.add('show');
+      placeOverlayBelowCircle(el);
+
+      playSE('fanfare');
+      try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
+      updateUnlockVisibility();
+    }else{
+      // 通常のGAMEOVER（白文字）
+      el.style.color = '#ffffff';
+      el.textContent = 'GAMEOVER';
+      overlay.classList.add('show');
+      placeOverlayBelowCircle(el);
+      playSE('bomb');
+    }
   }
 
   function stopGame(keepOverlay){
