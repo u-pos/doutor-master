@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>怒涛の嵐マスター</title>
+<title>怒涛の嵐マスター・ザ・ゲーム</title>
 <style>
   :root{ --bg:#0f1115; --fg:#eaeef2; }
   html,body{
@@ -48,7 +48,7 @@
   }
   #tapBtn[disabled]{opacity:.45;cursor:not-allowed}
 
-  .bar, #persecutionWrap{
+  .bar, #doctorWrap{
     width:min(92%,620px);
     display:grid;
     grid-template-columns: 1fr 1fr;
@@ -64,9 +64,10 @@
   }
   #startBtn{background:#10b981;border-color:#065f46;color:#062e26}
 
-  #persecutionBtn{display:none;background:#ef4444;color:#fff;border-radius:12px;padding:10px 12px}
-  #rankPerBtn{display:none}
-
+  /* ドクターモード（解放後に表示） */
+  #doctorBtn{display:none;background:#0ea5e9;color:#06202b;border-radius:12px;padding:10px 12px}
+  #rankDocBtn{display:none}
+  
   dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f111a;color:#fff}
   .dlg-head{padding:12px 14px;border-bottom:1px solid #253040;font-weight:700}
   .rank-list{width:100%;border-collapse:collapse}
@@ -74,7 +75,7 @@
 </style>
 </head>
 <body>
-  <header class="title" id="hdr"><h1>怒涛の嵐マスター THE GAME</h1></header>
+  <header class="title" id="hdr"><h1>怒涛の嵐マスター・ザ・ゲーム</h1></header>
 
   <div class="wrap">
     <div class="board" id="board">
@@ -88,14 +89,12 @@
 
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <!-- （）削除 -->
       <button id="rankNormalBtn" class="btn">🏆 通常</button>
     </div>
 
-    <div id="persecutionWrap">
-      <!-- （）削除 -->
-      <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
-      <button id="rankPerBtn" class="btn">🏆 迫害</button>
+    <div id="doctorWrap">
+      <button id="doctorBtn" class="btn">ドクターモード</button>
+      <button id="rankDocBtn" class="btn">🏆 ドクター</button>
     </div>
   </div>
 
@@ -120,21 +119,20 @@
 
     // 成功ゾーン（角幅の比率）←「前の広さ」に戻す
     NORMAL_ZONE: 0.10,
-    PERSECUTE_ZONE: 0.06,
 
     // ラグ救済（おまけ）1度
     HIT_EPSILON_DEG: 1,
 
-    // 見た目スケール（円/針/ゾーン太さを0.6倍）
+    // 見た目スケール（円/針/ゾーン太さを0.6倍）※元コード準拠
     DRAW_SCALE: 0.6
   };
 
   // ===== 要素 =====
   const $=id=>document.getElementById(id);
   const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
-  const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn');
-  const rankNormalBtn=$('rankNormalBtn'), rankPerBtn=$('rankPerBtn');
+  const tapRow=$('tapRow'), btnBar=$('btnBar'), doctorWrap=$('doctorWrap');
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), doctorBtn=$('doctorBtn');
+  const rankNormalBtn=$('rankNormalBtn'), rankDocBtn=$('rankDocBtn');
   const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome'), welcomeText=$('welcomeText');
   const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
 
@@ -148,18 +146,22 @@
   let showNeedle=false;
 
   // レイアウト記録
+  let cssW=0, cssH=0, dpr=1;
   let lastRadius=0, lastZoneLineWidth=24*CONFIG.DRAW_SCALE;
+
+  // 中心座標（通常はキャンバス中央、ドクターで成功毎に安全ランダム移動）
+  let centerX = 0;
+  let centerY = 0;
 
   // ===== レイアウト =====
   function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
   function fitBoardToViewport(){
     const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
-    const perH=(persecutionWrap.offsetHeight||0) * ((perBtn.style.display!=='none'||rankPerBtn.style.display!=='none')?1:0);
-    const reserve=headH+tapH+barH+perH+12;
+    const docH=(doctorWrap.offsetHeight||0) * ((doctorBtn.style.display!=='none'||rankDocBtn.style.display!=='none')?1:0);
+    const reserve=headH+tapH+barH+docH+12;
     const idealSide=Math.min(board.clientWidth||board.getBoundingClientRect().width||320, Math.max(160, vh-reserve));
     board.style.height=idealSide+'px';
   }
-  let cssW=0, cssH=0, dpr=1;
   function resizeCanvas(){
     fitBoardToViewport();
     const rect=cv.getBoundingClientRect();
@@ -167,6 +169,8 @@
     cssW=rect.width||300; cssH=rect.height||300;
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    // リサイズ時はいったん中央へ（次の成功でまた動く）
+    centerX = cssW/2; centerY = cssH/2;
     draw(getCurrentAngle(performance.now()));
     placeWelcomeBetweenCircleAndTap(); // ウェルカムを円とTAPの間へ
   }
@@ -204,10 +208,11 @@
   const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
-    const w=cssW,h=cssH,CX=w/2,CY=h/2;
-    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径0.6倍
-    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ0.6倍
-    const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ0.6倍
+    const w=cssW,h=cssH,CX=centerX,CY=centerY;
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径0.6倍（既存仕様）
+    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ
+    const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ
+    const needleLenRatio = 1.2;                         // 既存描画の針長（外周より少し長い）
     const ZS=zoneSize();
 
     lastRadius = r;
@@ -225,7 +230,7 @@
 
     // 針
     if(showNeedle){
-      const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
+      const fx=CX+(r*needleLenRatio)*Math.cos(angle), fy=CY+(r*needleLenRatio)*Math.sin(angle);
       ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
       ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
@@ -240,7 +245,7 @@
 
   // ===== オーバーレイ／ウェルカムの位置（円とTAPの間） =====
   function placeOverlayBelowCircle(ov){
-    const margin = 22; // 下げ幅の微調整はここ
+    const margin = 22;
     const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
     ov.style.transform = `translateY(${dy}px)`;
   }
@@ -272,12 +277,38 @@
     return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
   }
 
+  // ===== 安全ランダム中心（ドクターモード用） =====
+  function relocateCenterSafely(){
+    // CSSピクセル座標系（描画はCTXをdprで拡縮しているためCSS基準でOK）
+    const w = cssW, h = cssH;
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;
+    const zoneLine = 24*CONFIG.DRAW_SCALE;
+    const needleW  = 6*CONFIG.DRAW_SCALE;
+    const needleLenRatio = 1.2; // 針は外周より少し長い
+
+    // はみ出し防止マージン：針先が盤外に出ない最大長＋余白
+    const M = (r*needleLenRatio) + Math.max(zoneLine/2, needleW/2) + 2;
+
+    const minX = M, maxX = w - M;
+    const minY = M, maxY = h - M;
+
+    if (minX > maxX || minY > maxY){
+      centerX = w/2; centerY = h/2; return;
+    }
+    centerX = Math.round(minX + Math.random()*(maxX - minX));
+    centerY = Math.round(minY + Math.random()*(maxY - minY));
+  }
+
   // ===== ゲームロジック =====
   function setupInitial(){
     const center=Math.random()*FULL, ZS=zoneSize();
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI);
     lastInside=false; lastAngle=null;
+
+    // 初期中心はキャンバス中央
+    centerX = cssW/2; centerY = cssH/2;
+
     resizeCanvas();
   }
   function moveZoneAfterSuccess(a){
@@ -286,6 +317,11 @@
     const ZS=zoneSize();
     zoneStart=norm(nextCenter - ZS/2);
     lastInside=false; lastAngle=null;
+
+    // ★ ドクターモード時：成功のたびに中心を安全ランダム移動
+    if (mode === 'doctor') {
+      relocateCenterSafely();
+    }
   }
 
   function onTap(e){
@@ -302,7 +338,7 @@
       playSE('success');
       streak++;
 
-      // ★ 50到達時は何もしない（継続）。お祝いはミス時に出す！
+      // ★ 50到達時は継続。お祝いはミス時に出す（既存方針）
       baseAngle=a; baseTime=now;
       moveZoneAfterSuccess(a);
       draw(a);
@@ -346,7 +382,9 @@
 
   function startGame(which){
     mode=which;
-    currentZoneRatio=(mode==='persecution')?CONFIG.PERSECUTE_ZONE:CONFIG.NORMAL_ZONE;
+    // ★ ドクターモードでもゾーン幅は通常と同じ
+    currentZoneRatio = CONFIG.NORMAL_ZONE;
+
     welcome.style.display='none';
     playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
@@ -365,16 +403,16 @@
 
     const el = overlay.querySelector('.ovtxt');
 
-    if(streak >= CONFIG.TARGET_STREAK){
-      // ★ 50回以上続けたあとにミス → 祝メッセージ＆音
+    if(streak >= CONFIG.TARGET_STREAK && mode==='normal'){
+      // ★ 通常モードで50回以上継続→ミス時に解放告知＆SE
       el.innerHTML =
         '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
-        '<span class="unlock-red">迫害モードが解放されました</span>';
+        '<span class="unlock-red">ドクターモードがアンロック！</span>';
       overlay.classList.add('show');
       placeOverlayBelowCircle(el);
 
       playSE('fanfare');
-      try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
+      try{ localStorage.setItem('skillcheck_unlock_doctor','1'); }catch{}
       updateUnlockVisibility();
     }else{
       // 通常のGAMEOVER（白文字）
@@ -399,17 +437,17 @@
 
   // ===== ランキング =====
   const KEY_NORMAL='rank_normal_v2';
-  const KEY_PER   ='rank_per_v2';
+  const KEY_DOC   ='rank_doc_v1';
   function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
   function saveScore(entry){
-    const key=(mode==='persecution')?KEY_PER:KEY_NORMAL;
+    const key=(mode==='doctor')?KEY_DOC:KEY_NORMAL;
     if(entry.score<=0) return;
     const arr=loadScores(key); arr.push(entry);
     arr.sort((a,b)=> b.score-a.score || b.at-a.at);
     localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
   }
   function openRanking(which){
-    const key=(which==='persecution')?KEY_PER:KEY_NORMAL;
+    const key=(which==='doctor')?KEY_DOC:KEY_NORMAL;
     const arr=loadScores(key);
     rankTbody.innerHTML='';
     arr.forEach((e,i)=>{
@@ -418,29 +456,29 @@
       const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
       rankTbody.appendChild(tr);
     });
-    rankTitle.textContent=(which==='persecution')?'🏆 自己ランキングTOP5（迫害モード）':'🏆 自己ランキングTOP5（通常モード）';
+    rankTitle.textContent=(which==='doctor')?'🏆 自己ランキングTOP5（ドクターモード）':'🏆 自己ランキングTOP5（通常モード）';
     rankDlg.showModal();
   }
 
   // ===== ボタン可視制御 =====
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_persecution')==='1'; }catch{ return false; } }
+  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_doctor')==='1'; }catch{ return false; } }
   function updateUnlockVisibility(){
     const unlocked=isUnlocked();
-    perBtn.style.display = unlocked ? 'inline-block' : 'none';
-    rankPerBtn.style.display = unlocked ? 'inline-block' : 'none';
+    doctorBtn.style.display = unlocked ? 'inline-block' : 'none';
+    rankDocBtn.style.display = unlocked ? 'inline-block' : 'none';
     requestAnimationFrame(resizeCanvas);
   }
 
   // ===== イベント =====
-  startBtn.addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
-  perBtn  .addEventListener('click', e=>{ e.preventDefault(); startGame('persecution'); }, {passive:false});
-  tapBtn  .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  startBtn   .addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
+  doctorBtn  .addEventListener('click', e=>{ e.preventDefault(); startGame('doctor'); }, {passive:false});
+  tapBtn     .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
   window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
 
   muteBtn.addEventListener('click', e=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
-  $('rankNormalBtn').addEventListener('click', e=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
-  $('rankPerBtn')   .addEventListener('click', e=>{ e.preventDefault(); openRanking('persecution'); }, {passive:false});
-  $('closeRank')    .addEventListener('click', e=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
+  rankNormalBtn.addEventListener('click', e=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
+  rankDocBtn   .addEventListener('click', e=>{ e.preventDefault(); openRanking('doctor'); }, {passive:false});
+  closeRank    .addEventListener('click', e=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
 
   // ===== 初期化 =====
   setMuted(false);
