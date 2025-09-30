@@ -15,10 +15,9 @@
   header.title{width:100%;display:flex;justify-content:center;align-items:center;
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
-/* メッセージ全体を少し上へ */
-.unlock-msg {
-  transform: translateY(-20%); /* 数字はお好みで調整 (-10%～-20%) */
-}
+
+  /* メッセージ全体を少し上へ（元コード維持） */
+  .unlock-msg { transform: translateY(-20%); }
 
   .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px 2px}
 
@@ -35,24 +34,21 @@
   .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
     font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center}
   .overlay.show{display:flex}
-  /* Ready/GO を少し下へ */
-.overlay .ovtxt {
-  display:inline-block;
-  transform: translateY(30%); /* ← 下げ幅を調整 */
-  color: yellow;              /* ← フォント色を黄色に */
-}
-
+  /* Ready/GO を少し下へ（元コード維持） */
+  .overlay .ovtxt {
+    display:inline-block;
+    transform: translateY(30%);
+    color: yellow;
+  }
   /* 50回達成の最後の行を赤で */
-.overlay .unlock-red,
-.overlay .ovtxt .unlock-red {
-  color: #ff4d4d !important;
-}
+  .overlay .unlock-red,
+  .overlay .ovtxt .unlock-red { color: #ff4d4d !important; }
 
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
-  .welcome h2{margin:0;font-size:clamp(26px,8vw,46px);font-weight:900;color:#c8ffe0;transform: translateY(40%); /* ★下へ移動 */}
+  .welcome h2{margin:0;font-size:clamp(26px,8vw,46px);font-weight:900;color:#c8ffe0;transform: translateY(40%);}
 
-  /* TAPを少し上へ、下に少し余白 */
+  /* TAPを少し上へ、下に少し余白（元コード維持） */
   .tap-row{width:100%;max-width:820px;margin-top:2px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,620px);height:92px;margin-bottom:10px;
@@ -73,7 +69,7 @@
   /* 余白をややコンパクトに（縦方向の余白を減らす） */
   .btn{
     border:1px solid #26303a;background:#1f2937;color:#fff;border-radius:12px;
-    padding:10px 12px; /* ← 縦の余白を少なめに */
+    padding:10px 12px;
     font-weight:900;font-size:clamp(18px,5vw,24px);
     cursor:pointer;width:100%;
   }
@@ -104,14 +100,12 @@
     <!-- スタート＋ランキング（通常） -->
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
-      <!-- 表示をトロフィーアイコン（通常）に変更 -->
       <button id="rankNormalBtn" class="btn">🏆（通常）</button>
     </div>
 
     <!-- 迫害モード＋ランキング（迫害） -->
     <div id="persecutionWrap">
       <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
-      <!-- 表示をトロフィーアイコン（迫害）に変更 -->
       <button id="rankPerBtn" class="btn">🏆（迫害）</button>
     </div>
   </div>
@@ -135,9 +129,16 @@
     NEXT_MAX_DEG: 220,
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
+
+    // ゾーン角幅（比率）はそのまま。見た目の太さ・半径だけスケールします
     NORMAL_ZONE: 0.10,
     PERSECUTE_ZONE: 0.06,
-    HIT_EPSILON_DEG: 1.5
+
+    // おまけ（ラグ救済）角度を前作同様に厳しめへ
+    HIT_EPSILON_DEG: 1,   // ← 1.5 から 1 に
+
+    // 見た目スケール（円/針/ゾーン太さを 0.6 倍）
+    DRAW_SCALE: 0.6
   };
 
   // ===== 要素 =====
@@ -180,7 +181,7 @@
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('orientationchange', resizeCanvas);
   window.visualViewport?.addEventListener('resize', resizeCanvas);
-  requestAnimationFrame(resizeCanvas); // ← 初期に必ず呼ぶ
+  requestAnimationFrame(resizeCanvas); // 初期に必ず呼ぶ
 
   // ===== スクロール/ジェスチャ抑止 =====
   document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
@@ -211,21 +212,30 @@
   const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
-    const w=cssW,h=cssH,CX=w/2,CY=h/2, r=Math.min(w,h)*0.42;
+    const w=cssW,h=cssH,CX=w/2,CY=h/2;
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // ★ 半径を0.6倍
+    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ★ ゾーン太さを0.6倍
+    const needleW  = 6*CONFIG.DRAW_SCALE;               // ★ 針の太さを0.6倍
     const ZS=zoneSize();
+
     ctx.clearRect(0,0,w,h);
+
     // 外枠
     ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
-    // 白ゾーン
-    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#ffffff';
+
+    // 白ゾーン（見た目の太さだけ縮小。角度幅はロジック通り）
+    ctx.beginPath();
+    ctx.lineWidth=zoneLine; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
+
     // 赤い針（開始までは非表示）
     if(showNeedle){
       const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
       ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
-      ctx.lineWidth=6; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
+      ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
-    // コンボ（中心より少し上）
+
+    // コンボ（中心より少し上）※フォントは r に比例するので自動で小さく
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
@@ -278,7 +288,7 @@
     lastInputAt=now;
 
     const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
-    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180;
+    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180; // ★ 1度に
     const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= EPS;
 
     if(ok){
@@ -349,13 +359,12 @@
   function celebrateAndUnlock(){
     stopGame(true);
     playSE('fanfare');
-    /* ここをご指定の3段表示＆赤字に */
+    /* 3段表示＆赤字（元コード維持） */
     overlay.innerHTML =
-  '<div class="unlock-msg">' +      // ★ラップを追加
-    '50回達成おめでとう🎉<br><br><br>' +
-    '<span class="unlock-red">迫害モードが解放されました</span>' +
-  '</div>';
-
+      '<div class="unlock-msg">' +
+        '50回達成おめでとう🎉<br><br><br>' +
+        '<span class="unlock-red">迫害モードが解放されました</span>' +
+      '</div>';
     overlay.classList.add('show');
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
     updateUnlockVisibility();
