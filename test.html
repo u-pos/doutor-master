@@ -16,8 +16,8 @@
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
 
-  /* メッセージ全体を少し上へ（元コード維持） */
-  .unlock-msg { transform: translateY(-20%); }
+  /* 50達成の最後の行を赤で */
+  .overlay .unlock-red{ color:#ff4d4d !important; }
 
   .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px 2px}
 
@@ -34,21 +34,12 @@
   .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
     font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center}
   .overlay.show{display:flex}
-  /* Ready/GO を少し下へ（元コード維持） */
-  .overlay .ovtxt {
-    display:inline-block;
-    transform: translateY(30%);
-    color: yellow;
-  }
-  /* 50回達成の最後の行を赤で */
-  .overlay .unlock-red,
-  .overlay .ovtxt .unlock-red { color: #ff4d4d !important; }
+  .overlay .ovtxt{display:inline-block;color:yellow;line-height:1}
 
   .welcome{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;z-index:2;
     text-align:center;background:rgba(0,0,0,.25)}
-  .welcome h2{margin:0;font-size:clamp(26px,8vw,46px);font-weight:900;color:#c8ffe0;transform: translateY(40%);}
+  .welcome h2{margin:0;font-size:clamp(26px,8vw,46px);font-weight:900;color:#c8ffe0;}
 
-  /* TAPを少し上へ、下に少し余白（元コード維持） */
   .tap-row{width:100%;max-width:820px;margin-top:2px;display:flex;justify-content:center}
   #tapBtn{
     width:min(92%,620px);height:92px;margin-bottom:10px;
@@ -57,7 +48,6 @@
   }
   #tapBtn[disabled]{opacity:.45;cursor:not-allowed}
 
-  /* 下のボタンを横幅いっぱいで2列グリッドに揃える */
   .bar, #persecutionWrap{
     width:min(92%,620px);
     display:grid;
@@ -66,7 +56,6 @@
     justify-content:center;
     align-items:stretch;
   }
-  /* 余白をややコンパクトに（縦方向の余白を減らす） */
   .btn{
     border:1px solid #26303a;background:#1f2937;color:#fff;border-radius:12px;
     padding:10px 12px;
@@ -78,7 +67,7 @@
   #persecutionBtn{display:none;background:#ef4444;color:#fff;border-radius:12px;padding:10px 12px}
   #rankPerBtn{display:none}
 
-  dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f131a;color:#fff}
+  dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f111a;color:#fff}
   .dlg-head{padding:12px 14px;border-bottom:1px solid #253040;font-weight:700}
   .rank-list{width:100%;border-collapse:collapse}
   .rank-list th,.rank-list td{padding:8px 6px;border-bottom:1px solid #1d2533;text-align:left}
@@ -91,26 +80,23 @@
     <div class="board" id="board">
       <canvas id="cv"></canvas>
       <button id="muteBtn" aria-label="ミュート切替">🔊</button>
-      <div id="welcome" class="welcome"><h2>目指せ 50連続！</h2></div>
+      <div id="welcome" class="welcome"><h2 id="welcomeText">目指せ 50連続！</h2></div>
       <div id="overlay" class="overlay"><div class="ovtxt"></div></div>
     </div>
 
     <div class="tap-row" id="tapRow"><button id="tapBtn" disabled>TAP</button></div>
 
-    <!-- スタート＋ランキング（通常） -->
     <div class="bar" id="btnBar">
       <button id="startBtn" class="btn">▶ スタート</button>
       <button id="rankNormalBtn" class="btn">🏆（通常）</button>
     </div>
 
-    <!-- 迫害モード＋ランキング（迫害） -->
     <div id="persecutionWrap">
       <button id="persecutionBtn" class="btn">⚠ 迫害モード</button>
       <button id="rankPerBtn" class="btn">🏆（迫害）</button>
     </div>
   </div>
 
-  <!-- ランキング -->
   <dialog id="rankDlg">
     <div class="dlg-head" id="rankTitle">🏆 自己ランキングTOP5（通常モード）</div>
     <div class="dlg-body">
@@ -121,7 +107,7 @@
 
 <script>
 (() => {
-  // ===== 設定（安定動作の仕様） =====
+  // ===== 設定 =====
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
@@ -130,14 +116,13 @@
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    // ゾーン角幅（比率）はそのまま。見た目の太さ・半径だけスケールします
     NORMAL_ZONE: 0.10,
     PERSECUTE_ZONE: 0.06,
 
-    // おまけ（ラグ救済）角度を前作同様に厳しめへ
-    HIT_EPSILON_DEG: 1,   // ← 1.5 から 1 に
+    // ラグ救済（おまけ）を厳しめ：1度
+    HIT_EPSILON_DEG: 1,
 
-    // 見た目スケール（円/針/ゾーン太さを 0.6 倍）
+    // 見た目スケール（円/針/ゾーン太さを0.6倍）
     DRAW_SCALE: 0.6
   };
 
@@ -147,7 +132,7 @@
   const tapRow=$('tapRow'), btnBar=$('btnBar'), persecutionWrap=$('persecutionWrap');
   const tapBtn=$('tapBtn'), startBtn=$('startBtn'), perBtn=$('persecutionBtn');
   const rankNormalBtn=$('rankNormalBtn'), rankPerBtn=$('rankPerBtn');
-  const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome');
+  const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome'), welcomeText=$('welcomeText');
   const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
 
   // ===== 状態 =====
@@ -157,9 +142,15 @@
   const zoneSize=()=>FULL*currentZoneRatio;
   let baseAngle=0, baseTime=0, frozenAngle=0, zoneStart=0;
   let lastAngle=null, lastInside=false;
-  let showNeedle=false; // 針の表示制御
+  let showNeedle=false;
 
-  // ===== 画面高フィット（ボタンが隠れない） =====
+  // 50到達演出は一度だけ出す
+  let milestoneShown=false;
+
+  // レイアウト用（円の半径など記録）
+  let lastRadius=0, lastZoneLineWidth=24*CONFIG.DRAW_SCALE;
+
+  // ===== 画面高フィット =====
   function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
   function fitBoardToViewport(){
     const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
@@ -177,17 +168,18 @@
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     draw(getCurrentAngle(performance.now()));
+    placeWelcomeBetweenCircleAndTap(); // ← ウェルカムを円とTAPの間に
   }
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('orientationchange', resizeCanvas);
   window.visualViewport?.addEventListener('resize', resizeCanvas);
-  requestAnimationFrame(resizeCanvas); // 初期に必ず呼ぶ
+  requestAnimationFrame(resizeCanvas);
 
   // ===== スクロール/ジェスチャ抑止 =====
   document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
   ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ===== サウンド（WebAudio＋フォールバック）=====
+  // ===== サウンド =====
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   let actx=null,gMaster=null;
   const buf={success:null,bomb:null,ready:null,fanfare:null};
@@ -213,17 +205,20 @@
 
   function draw(angle){
     const w=cssW,h=cssH,CX=w/2,CY=h/2;
-    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // ★ 半径を0.6倍
-    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ★ ゾーン太さを0.6倍
-    const needleW  = 6*CONFIG.DRAW_SCALE;               // ★ 針の太さを0.6倍
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径0.6倍
+    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ0.6倍
+    const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ0.6倍
     const ZS=zoneSize();
+
+    lastRadius = r;
+    lastZoneLineWidth = zoneLine;
 
     ctx.clearRect(0,0,w,h);
 
     // 外枠
     ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 白ゾーン（見た目の太さだけ縮小。角度幅はロジック通り）
+    // 白ゾーン
     ctx.beginPath();
     ctx.lineWidth=zoneLine; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
@@ -235,12 +230,24 @@
       ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
 
-    // コンボ（中心より少し上）※フォントは r に比例するので自動で小さく
+    // コンボ
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
     ctx.lineWidth=Math.max(2,Math.round(r*0.04)); ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.strokeText(combo,CX,CY-r*0.18);
     ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18); ctx.restore();
+  }
+
+  // ===== オーバーレイ／ウェルカムの位置（円とTAPの間） =====
+  function placeOverlayBelowCircle(ov){
+    const margin = 22; // お好みで微調整
+    const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
+    ov.style.transform = `translateY(${dy}px)`;
+  }
+  function placeWelcomeBetweenCircleAndTap(){
+    const margin = 22;
+    const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
+    welcomeText.style.transform = `translateY(${dy}px)`;
   }
 
   // ===== ループ =====
@@ -270,6 +277,7 @@
     const center=Math.random()*FULL, ZS=zoneSize();
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI);
+    milestoneShown=false;
     lastInside=false; lastAngle=null;
     resizeCanvas();
   }
@@ -288,19 +296,28 @@
     lastInputAt=now;
 
     const a=angleAt(now), ZS=zoneSize(), end=norm(zoneStart+ZS);
-    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180; // ★ 1度に
+    const EPS=CONFIG.HIT_EPSILON_DEG*Math.PI/180;
     const ok = inRange(a, zoneStart, end) || cwDelta(end, a) <= EPS;
 
     if(ok){
       playSE('success');
       streak++;
-      if(streak>=CONFIG.TARGET_STREAK){ return celebrateAndUnlock(); }
-      baseAngle=a; baseTime=now; moveZoneAfterSuccess(a); draw(a);
+
+      // ★ 50到達時：ゲームは継続（非ブロッキング演出 & アンロック）
+      if(!milestoneShown && streak >= CONFIG.TARGET_STREAK){
+        milestoneShown = true;
+        celebrateMilestoneNonBlocking();
+      }
+
+      baseAngle=a; baseTime=now;
+      moveZoneAfterSuccess(a);
+      draw(a);
     }else{
       gameOver();
     }
   }
 
+  // Ready/GO は従来位置のまま（必要なら placeOverlayBelowCircle に差し替え可能）
   function showCountdown(){
     overlay.classList.add('show');
     overlay.innerHTML = '<div class="ovtxt">Ready</div>';
@@ -335,10 +352,32 @@
     playSE('ready'); unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
     streak=0;
-    showNeedle=false; // スタート直後は針を消す
+    showNeedle=false;
     setupInitial();
     showCountdown();
     rafId=requestAnimationFrame(loop);
+  }
+
+  // ★ 50達成：ゲームを止めずに表示だけ出して自動で消す
+  function celebrateMilestoneNonBlocking(){
+    // アンロック
+    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
+    updateUnlockVisibility();
+
+    // 表示
+    const msg =
+      '<span style="color:#ffffff">50回達成おめでとう🎉</span><br><span class="unlock-red">迫害モードが解放されました</span>';
+    const el = overlay.querySelector('.ovtxt');
+    el.innerHTML = msg;
+    overlay.classList.add('show');
+    placeOverlayBelowCircle(el);   // ← 円とTAPの間に配置
+    playSE('fanfare');
+
+    // 数秒で自動フェードアウト（シンプルに非表示）
+    setTimeout(()=>{
+      overlay.classList.remove('show');
+      el.textContent='';
+    }, 2400);
   }
 
   function gameOver(){
@@ -354,21 +393,6 @@
     if(rafId) cancelAnimationFrame(rafId);
     if(!keepOverlay) overlay.classList.remove('show');
     draw(frozenAngle);
-  }
-
-  function celebrateAndUnlock(){
-    stopGame(true);
-    playSE('fanfare');
-    /* 3段表示＆赤字（元コード維持） */
-    overlay.innerHTML =
-      '<div class="unlock-msg">' +
-        '50回達成おめでとう🎉<br><br><br>' +
-        '<span class="unlock-red">迫害モードが解放されました</span>' +
-      '</div>';
-    overlay.classList.add('show');
-    try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
-    updateUnlockVisibility();
-    saveScore({score:streak, at:Date.now()});
   }
 
   // ===== ランキング =====
