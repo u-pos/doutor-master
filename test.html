@@ -116,10 +116,11 @@
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    NORMAL_ZONE: 0.10,
-    PERSECUTE_ZONE: 0.06,
+    // ★成功ゾーン（角幅）を「90%小さく」= 元の10%に
+    NORMAL_ZONE: 0.01,   // 旧 0.10 → 0.01
+    PERSECUTE_ZONE: 0.006, // 旧 0.06 → 0.006
 
-    // ラグ救済（おまけ）を厳しめ：1度
+    // ラグ救済（おまけ）1度
     HIT_EPSILON_DEG: 1,
 
     // 見た目スケール（円/針/ゾーン太さを0.6倍）
@@ -144,7 +145,7 @@
   let lastAngle=null, lastInside=false;
   let showNeedle=false;
 
-  // 50到達演出は一度だけ出す
+  // 50到達演出は一度だけ
   let milestoneShown=false;
 
   // レイアウト用（円の半径など記録）
@@ -168,7 +169,7 @@
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     draw(getCurrentAngle(performance.now()));
-    placeWelcomeBetweenCircleAndTap(); // ← ウェルカムを円とTAPの間に
+    placeWelcomeBetweenCircleAndTap(); // ウェルカムを円とTAPの間に
   }
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('orientationchange', resizeCanvas);
@@ -218,12 +219,12 @@
     // 外枠
     ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 白ゾーン
+    // 成功ゾーン（白）
     ctx.beginPath();
     ctx.lineWidth=zoneLine; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
 
-    // 赤い針（開始までは非表示）
+    // 針
     if(showNeedle){
       const fx=CX+r*1.2*Math.cos(angle), fy=CY+r*1.2*Math.sin(angle);
       ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(fx,fy);
@@ -240,7 +241,7 @@
 
   // ===== オーバーレイ／ウェルカムの位置（円とTAPの間） =====
   function placeOverlayBelowCircle(ov){
-    const margin = 22; // お好みで微調整
+    const margin = 22; // 下げ幅は好みで微調整OK
     const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
     ov.style.transform = `translateY(${dy}px)`;
   }
@@ -303,7 +304,7 @@
       playSE('success');
       streak++;
 
-      // ★ 50到達時：ゲームは継続（非ブロッキング演出 & アンロック）
+      // 50到達：継続（非ブロッキング表示 & アンロック）
       if(!milestoneShown && streak >= CONFIG.TARGET_STREAK){
         milestoneShown = true;
         celebrateMilestoneNonBlocking();
@@ -317,10 +318,14 @@
     }
   }
 
-  // Ready/GO は従来位置のまま（必要なら placeOverlayBelowCircle に差し替え可能）
+  // Ready/GO も円とTAPの間へ
   function showCountdown(){
     overlay.classList.add('show');
-    overlay.innerHTML = '<div class="ovtxt">Ready</div>';
+    const el = overlay.querySelector('.ovtxt');
+    el.style.color = 'yellow';
+    el.textContent = 'Ready';
+    placeOverlayBelowCircle(el);      // ★ 位置調整
+
     tapBtn.disabled=true; phase='countdown';
     showNeedle=false; draw(frozenAngle);
 
@@ -329,7 +334,7 @@
       const now=performance.now();
       if(now>=end){
         overlay.classList.remove('show');
-        overlay.innerHTML = '<div class="ovtxt"></div>';
+        el.textContent='';
         baseAngle=frozenAngle; baseTime=now;
         phase='play'; tapBtn.disabled=false;
         showNeedle=true;
@@ -338,7 +343,8 @@
         return;
       }
       if(now>=mid){
-        const el=overlay.querySelector('.ovtxt'); if(el) el.textContent='GO!';
+        el.textContent='GO!';
+        placeOverlayBelowCircle(el);  // ★ 位置維持
       }
       requestAnimationFrame(tick);
     };
@@ -358,22 +364,19 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ★ 50達成：ゲームを止めずに表示だけ出して自動で消す
+  // ★ 50達成：ゲームを止めずに表示だけ出して自動で消す（円とTAPの間）
   function celebrateMilestoneNonBlocking(){
-    // アンロック
     try{ localStorage.setItem('skillcheck_unlock_persecution','1'); }catch{}
     updateUnlockVisibility();
 
-    // 表示
-    const msg =
-      '<span style="color:#ffffff">50回達成おめでとう🎉</span><br><span class="unlock-red">迫害モードが解放されました</span>';
     const el = overlay.querySelector('.ovtxt');
-    el.innerHTML = msg;
+    el.innerHTML =
+      '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
+      '<span class="unlock-red">迫害モードが解放されました</span>';
     overlay.classList.add('show');
-    placeOverlayBelowCircle(el);   // ← 円とTAPの間に配置
+    placeOverlayBelowCircle(el);
     playSE('fanfare');
 
-    // 数秒で自動フェードアウト（シンプルに非表示）
     setTimeout(()=>{
       overlay.classList.remove('show');
       el.textContent='';
@@ -385,13 +388,23 @@
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
     updateUnlockVisibility();
+
+    // ★ GAMEOVER を「目指せ50連続！」と同じ位置（円とTAPの間）に白で表示
+    const el = overlay.querySelector('.ovtxt');
+    el.style.color = '#ffffff';
+    el.textContent = 'GAMEOVER';
+    overlay.classList.add('show');
+    placeOverlayBelowCircle(el);
   }
 
   function stopGame(keepOverlay){
     phase='idle'; tapBtn.disabled=true;
     showNeedle=false;
     if(rafId) cancelAnimationFrame(rafId);
-    if(!keepOverlay) overlay.classList.remove('show');
+    if(!keepOverlay){
+      overlay.classList.remove('show');
+      overlay.querySelector('.ovtxt').textContent='';
+    }
     draw(frozenAngle);
   }
 
@@ -412,7 +425,7 @@
     rankTbody.innerHTML='';
     arr.forEach((e,i)=>{
       const d=new Date(e.at);
-      const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate())}`;
       const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
       rankTbody.appendChild(tr);
     });
