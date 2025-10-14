@@ -200,7 +200,14 @@
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   let actx=null,gMaster=null;
   const buf={success:null,bomb:null,ready:null,fanfare:null};
-  const html={};['success','bomb','ready','fanfare'].forEach(k=>{const a=new Audio(`${k}.mp3`);a.preload='auto';a.playsInline=true;html[k]=a;});
+　const html={};['success','bomb','ready','fanfare'].forEach(k=>{
+  // 「ready」だけ「ready1.mp3」に変更
+  const file = (k === 'ready') ? 'ready1.mp3' : `${k}.mp3`;
+  const a = new Audio(file);
+  a.preload = 'auto';
+  a.playsInline = true;
+  html[k] = a;
+});
   async function unlockAndWarmAudio(){
     try{
       if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=isMuted?0:1; gMaster.connect(actx.destination);}
@@ -209,7 +216,7 @@
     }catch{}
   }
   function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
-  function playBuf(key,gain=0.95){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
+  function playBuf(key,gain=0.70){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
   function playSE(key){ if(isMuted) return; if(playBuf(key)) return; unlockAndWarmAudio(); const tag=html[key]; if(tag){ try{ tag.currentTime=0; tag.play(); }catch{} } }
   window.addEventListener('pointerdown', ()=>{ unlockAndWarmAudio(); }, {once:true});
 
