@@ -16,7 +16,6 @@
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
 
-  /* 祝メッセージの最後の行を赤で */
   .overlay .unlock-red{ color:#ff4d4d !important; }
 
   .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px 2px}
@@ -24,7 +23,6 @@
   .board{width:100%;max-width:720px;position:relative}
   #cv{width:100%;height:100%;display:block;background:#0b0e13;border-radius:12px}
 
-  /* ミュート（円の左上固定） */
   #muteBtn{
     position:absolute;top:6px;left:6px;z-index:5;
     width:40px;height:40px;font-size:20px;line-height:1;text-align:center;
@@ -64,11 +62,11 @@
   }
   #startBtn{background:#10b981;border-color:#065f46;color:#062e26}
 
-  /* ドクターモード（解放後に表示） */
+  /* ドクター */
   #doctorBtn{display:none;background:#0ea5e9;color:#06202b;border-radius:12px;padding:10px 12px}
   #rankDocBtn{display:none}
 
-  /* ドクターモード2（解放後に表示） */
+  /* ドクター2 */
   #doctor2Btn{display:none;background:#38bdf8;color:#05202b;border-radius:12px;padding:10px 12px}
   #rankDoc2Btn{display:none}
   
@@ -121,19 +119,20 @@
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
+    // ③ 反対側へ：180〜270度
     NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 220,
+    NEXT_MAX_DEG: 270,
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    // 成功ゾーン（角幅の比率）
-    NORMAL_ZONE: 0.10,
+    // ① 成功ゾーンを1.1倍（従来0.10 → 0.11）
+    NORMAL_ZONE: 0.11,
 
-    // ラグ救済（おまけ）1度
+    // ラグ救済
     HIT_EPSILON_DEG: 1,
 
-    // 見た目スケール（円/針/ゾーン太さを0.6倍）
-    DRAW_SCALE: 0.6
+    // ② 見た目を全体80%に（従来0.60 × 0.80 = 0.48）
+    DRAW_SCALE: 0.48
   };
 
   // ===== 要素 =====
@@ -171,7 +170,6 @@
   function visualH(){ return (window.visualViewport?.height) || window.innerHeight; }
   function fitBoardToViewport(){
     const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
-    // ドクター/ドクター2の行（表示時のみ高さ加算）
     const docH=(doctorWrap.offsetHeight||0) * ((doctorBtn.style.display!=='none'||rankDocBtn.style.display!=='none')?1:0);
     const doc2H=(document.getElementById('doctor2Wrap').offsetHeight||0) * ((doctor2Btn.style.display!=='none'||rankDoc2Btn.style.display!=='none')?1:0);
     const reserve=headH+tapH+barH+docH+doc2H+12;
@@ -185,7 +183,6 @@
     cssW=rect.width||300; cssH=rect.height||300;
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    // リサイズ時はいったん中央へ（次の成功でまた動く）
     centerX = cssW/2; centerY = cssH/2;
     draw(getCurrentAngle(performance.now()));
     placeWelcomeBetweenCircleAndTap();
@@ -225,7 +222,7 @@
 
   function draw(angle){
     const w=cssW,h=cssH,CX=centerX,CY=centerY;
-    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径0.6倍
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径
     const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ
     const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ
     const needleLenRatio = 1.2;                         // 針長
@@ -251,7 +248,7 @@
       ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
 
-    // コンボ
+    // コンボ表示
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
@@ -287,7 +284,6 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ===== 入力タイムスタンプ =====
   function tapTimestamp(e){
     const ts=(e&&typeof e.timeStamp==='number')?e.timeStamp:performance.now();
     return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
@@ -313,26 +309,26 @@
     centerY = Math.round(minY + Math.random()*(maxY - minY));
   }
 
-  // ===== ゲームセットアップ =====
+  // ===== セットアップ =====
   function setupInitial(){
     const center=Math.random()*FULL, ZS=zoneSize();
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI);
     lastInside=false; lastAngle=null;
-
-    // 初期中心はキャンバス中央
     centerX = cssW/2; centerY = cssH/2;
-
     resizeCanvas();
   }
-  function moveZoneAfterSuccess(a){
-    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
-    const nextCenter=norm(a + (min + Math.random()*(max-min)));
+
+  // ③ 次のゾーンは「前ゾーン中心」から180〜270度先
+  function moveZoneAfterSuccess(currentAngle){
     const ZS=zoneSize();
-    zoneStart=norm(nextCenter - ZS/2);
+    const prevCenter = norm(zoneStart + ZS/2); // 直前ゾーンの中心
+    const offsetDeg = CONFIG.NEXT_MIN_DEG + Math.random()*(CONFIG.NEXT_MAX_DEG - CONFIG.NEXT_MIN_DEG);
+    const nextCenter = norm(prevCenter + (offsetDeg*Math.PI/180));
+    zoneStart = norm(nextCenter - ZS/2);
     lastInside=false; lastAngle=null;
 
-    // ドクター/ドクター2：成功のたびに中心を安全ランダム移動
+    // ドクター/ドクター2：成功ごとに中心をランダム移動
     if (mode!=='normal') {
       relocateCenterSafely();
     }
@@ -353,9 +349,7 @@
       playSE('success');
       streak++;
 
-      // 針の方向はドクター2のみ反転
       if (mode==='doctor2') {
-        // 反転前に基準を固定
         baseAngle = a; baseTime = now;
         direction *= -1; // 反転
       } else {
@@ -369,7 +363,6 @@
     }
   }
 
-  // Ready/GO を円とTAPの間に表示
   function showCountdown(){
     overlay.classList.add('show');
     const el = overlay.querySelector('.ovtxt');
@@ -405,7 +398,7 @@
   function startGame(which){
     mode=which;
     currentZoneRatio = CONFIG.NORMAL_ZONE;
-    direction = 1; // 開始時は常に正方向から
+    direction = 1; // 毎回リセット
 
     welcome.style.display='none';
     playSE('ready'); unlockAndWarmAudio();
@@ -417,7 +410,7 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ===== ゲームオーバー（解放演出をここで制御） =====
+  // ===== ゲームオーバー & 解放 =====
   function gameOver(){
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
@@ -425,7 +418,6 @@
 
     const el = overlay.querySelector('.ovtxt');
 
-    // 通常→50達成で「ドクター」解放
     if(streak >= CONFIG.TARGET_STREAK && mode==='normal'){
       el.innerHTML =
         '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
@@ -438,7 +430,6 @@
       return;
     }
 
-    // ドクター→50達成で「ドクター2」解放
     if(streak >= CONFIG.TARGET_STREAK && mode==='doctor'){
       el.innerHTML =
         '<span style="color:#ffffff">ドクターで50回達成🎉</span><br>' +
@@ -451,7 +442,6 @@
       return;
     }
 
-    // 通常のGAMEOVER
     el.style.color = '#ffffff';
     el.textContent = 'GAMEOVER';
     overlay.classList.add('show');
