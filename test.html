@@ -23,11 +23,28 @@
   .board{width:100%;max-width:720px;position:relative}
   #cv{width:100%;height:100%;display:block;background:#0b0e13;border-radius:12px}
 
+  /* 左上：ミュートボタン */
   #muteBtn{
     position:absolute;top:6px;left:6px;z-index:5;
     width:40px;height:40px;font-size:20px;line-height:1;text-align:center;
     border-radius:8px;border:1px solid #26303a;background:#1f2937;color:#eaeef2;cursor:pointer;
   }
+
+  /* 右上：モード表示バッジ */
+  #modeBadge{
+    position:absolute;top:6px;right:6px;z-index:5;
+    display:inline-flex;align-items:center;gap:6px;
+    padding:8px 10px;border-radius:10px;border:1px solid #26303a;
+    background:#1f2937;color:#eaeef2;font-weight:800;
+    font-size:clamp(12px,3.2vw,14px);letter-spacing:.02em;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+    user-select:none;
+  }
+  #modeDot{
+    width:10px;height:10px;border-radius:9999px;background:#10b981; /* 初期:通常=グリーン */
+    box-shadow:0 0 0 2px rgba(0,0,0,.25) inset;
+  }
+  #modeText{ white-space:nowrap }
 
   .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:3;font-weight:900;
     font-size:clamp(26px,7.5vw,52px);background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(1px);text-align:center}
@@ -82,7 +99,16 @@
   <div class="wrap">
     <div class="board" id="board">
       <canvas id="cv"></canvas>
+
+      <!-- 左上：ミュート -->
       <button id="muteBtn" aria-label="ミュート切替">🔊</button>
+
+      <!-- 右上：モード表示 -->
+      <div id="modeBadge" aria-live="polite" aria-atomic="true" title="現在のプレイモード">
+        <span id="modeDot" aria-hidden="true"></span>
+        <span id="modeText">通常</span>
+      </div>
+
       <div id="welcome" class="welcome"><h2 id="welcomeText">目指せ 50連続！</h2></div>
       <div id="overlay" class="overlay"><div class="ovtxt"></div></div>
     </div>
@@ -119,20 +145,17 @@
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
-    // ③ 反対側へ：180〜270度
-    NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 270,
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    // ① 成功ゾーンを1.1倍（従来0.10 → 0.11）
-    NORMAL_ZONE: 0.12,
+    // 成功ゾーン幅 1.1倍
+    NORMAL_ZONE: 0.11,
 
     // ラグ救済
     HIT_EPSILON_DEG: 1,
 
-    // ② 見た目を全体80%に（従来0.60 × 0.80 = 0.48）
-    DRAW_SCALE: 0.60
+    // 見た目を全体80%（元0.60 × 0.80 = 0.48）
+    DRAW_SCALE: 0.48
   };
 
   // ===== 要素 =====
@@ -145,6 +168,9 @@
   const rankNormalBtn=$('rankNormalBtn');
   const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome'), welcomeText=$('welcomeText');
   const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
+
+  // ★ 右上モードバッジ
+  const modeBadge=$('modeBadge'), modeDot=$('modeDot'), modeText=$('modeText');
 
   // ===== 状態 =====
   let phase='idle', streak=0, lastInputAt=0, rafId=0, isMuted=false;
@@ -196,28 +222,70 @@
   document.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
   ['gesturestart','gesturechange','gestureend','dblclick'].forEach(ev=>document.addEventListener(ev,(e)=>e.preventDefault(),{passive:false}));
 
-  // ===== サウンド =====
+  // ===== サウンド（ファイル名マップで ready を ready1.mp3 に固定） =====
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   let actx=null,gMaster=null;
   const buf={success:null,bomb:null,ready:null,fanfare:null};
-　const html={};['success','bomb','ready','fanfare'].forEach(k=>{
-  // 「ready」だけ「ready1.mp3」に変更
-  const file = (k === 'ready') ? 'ready1.mp3' : `${k}.mp3`;
-  const a = new Audio(file);
-  a.preload = 'auto';
-  a.playsInline = true;
-  html[k] = a;
-});
+
+  const FILES = {
+    success: 'success.mp3',
+    bomb:    'bomb.mp3',
+    ready:   'ready1.mp3', // 小音量版
+    fanfare: 'fanfare.mp3'
+  };
+
+  const html={};
+  Object.keys(FILES).forEach(k=>{
+    const a=new Audio(FILES[k]);
+    a.preload='auto';
+    a.playsInline=true;
+    html[k]=a;
+  });
+
   async function unlockAndWarmAudio(){
     try{
-      if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=isMuted?0:1; gMaster.connect(actx.destination);}
+      if(!actx){
+        actx=new AudioCtx({latencyHint:'interactive'});
+        gMaster=actx.createGain();
+        gMaster.gain.value=isMuted?0:1;
+        gMaster.connect(actx.destination);
+      }
       if(actx.state==='suspended') await actx.resume();
-      await Promise.all(Object.keys(buf).map(async k=>{ if(buf[k]) return; const res=await fetch(`${k}.mp3`); const ab=await res.arrayBuffer(); buf[k]=await actx.decodeAudioData(ab); }));
+      await Promise.all(Object.keys(buf).map(async k=>{
+        if(buf[k]) return;
+        const res=await fetch(FILES[k]);
+        const ab=await res.arrayBuffer();
+        buf[k]=await actx.decodeAudioData(ab);
+      }));
     }catch{}
   }
   function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
-  function playBuf(key,gain=0.70){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
-  function playSE(key){ if(isMuted) return; if(playBuf(key)) return; unlockAndWarmAudio(); const tag=html[key]; if(tag){ try{ tag.currentTime=0; tag.play(); }catch{} } }
+
+  function playBuf(key,gain=0.95){
+    try{
+      if(!actx||!buf[key]) return false;
+      const src=actx.createBufferSource();
+      const g=actx.createGain();
+      g.gain.value=gain;
+      src.buffer=buf[key];
+      src.connect(g).connect(gMaster||actx.destination);
+      src.start();
+      return true;
+    }catch{return false}
+  }
+  function playSE(key, vol=1){
+    if(isMuted) return;
+    if(playBuf(key, vol)) return;
+    unlockAndWarmAudio();
+    const tag=html[key];
+    if(tag){
+      try{
+        tag.volume = vol;
+        tag.currentTime=0;
+        tag.play();
+      }catch{}
+    }
+  }
   window.addEventListener('pointerdown', ()=>{ unlockAndWarmAudio(); }, {once:true});
 
   // ===== 角度/描画 =====
@@ -229,10 +297,10 @@
 
   function draw(angle){
     const w=cssW,h=cssH,CX=centerX,CY=centerY;
-    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径
-    const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ
-    const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ
-    const needleLenRatio = 1.2;                         // 針長
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;
+    const zoneLine = 24*CONFIG.DRAW_SCALE;
+    const needleW  = 6*CONFIG.DRAW_SCALE;
+    const needleLenRatio = 1.2;
     const ZS=zoneSize();
 
     lastRadius = r;
@@ -243,7 +311,7 @@
     // 外枠
     ctx.beginPath(); ctx.arc(CX,CY,r,0,FULL); ctx.lineWidth=2; ctx.strokeStyle='#1a2330'; ctx.stroke();
 
-    // 成功ゾーン（白）
+    // 成功ゾーン
     ctx.beginPath();
     ctx.lineWidth=zoneLine; ctx.strokeStyle='#ffffff';
     ctx.arc(CX,CY,r,zoneStart,zoneStart+ZS); ctx.stroke();
@@ -255,7 +323,7 @@
       ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
 
-    // コンボ表示
+    // コンボ
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
@@ -326,32 +394,25 @@
     resizeCanvas();
   }
 
-  // ③ 次のゾーンは「前ゾーン中心」から180〜270度先
-// ③ 次のゾーンはモードごとに指定範囲で移動
-function moveZoneAfterSuccess(currentAngle){
-  const ZS = zoneSize();
-  const prevCenter = norm(zoneStart + ZS / 2); // 前ゾーンの中心
+  // 次のゾーン：モードごとに角度範囲を変更
+  // - normal: 180〜270度（反対側寄り）
+  // - doctor: 180〜270度
+  // - doctor2: 90〜180度
+  function moveZoneAfterSuccess(){
+    const ZS=zoneSize();
+    const prevCenter = norm(zoneStart + ZS/2);
 
-  // === モードごとの角度範囲設定 ===
-  let minDeg = 180, maxDeg = 270; // デフォルト: ドクター
-  if (mode === 'normal') { 
-    minDeg = 180; maxDeg = 270; // 通常モードは従来通り（必要なら自由に変えてOK）
-  } else if (mode === 'doctor') {
-    minDeg = 160; maxDeg = 220; // ドクター → 反対側寄り
-  } else if (mode === 'doctor2') {
-    minDeg = 145;  maxDeg = 195; // ドクター2 → やや斜め方向
+    let minDeg=180, maxDeg=270;
+    if (mode==='doctor2'){ minDeg=90; maxDeg=180; }
+
+    const offsetDeg = minDeg + Math.random()*(maxDeg - minDeg);
+    const nextCenter = norm(prevCenter + (offsetDeg*Math.PI/180));
+
+    zoneStart = norm(nextCenter - ZS/2);
+    lastInside=false; lastAngle=null;
+
+    if (mode!=='normal') relocateCenterSafely();
   }
-
-  // === 次ゾーンの中心角計算 ===
-  const offsetDeg = minDeg + Math.random() * (maxDeg - minDeg);
-  const nextCenter = norm(prevCenter + (offsetDeg * Math.PI / 180));
-  zoneStart = norm(nextCenter - ZS / 2);
-  lastInside = false;
-  lastAngle = null;
-
-  // 中心の移動（ドクター系のみ）
-  if (mode !== 'normal') relocateCenterSafely();
-}
 
   // ===== 入力処理 =====
   function onTap(e){
@@ -375,7 +436,7 @@ function moveZoneAfterSuccess(currentAngle){
         baseAngle = a; baseTime = now;
       }
 
-      moveZoneAfterSuccess(a);
+      moveZoneAfterSuccess();
       draw(a);
     }else{
       gameOver();
@@ -414,13 +475,27 @@ function moveZoneAfterSuccess(currentAngle){
     requestAnimationFrame(tick);
   }
 
+  // ★ モードバッジ更新
+  function updateModeBadge(){
+    let text='通常', dot='#10b981', bg='#1f2937', bd='#26303a';
+    if(mode==='doctor'){ text='ドクター'; dot='#0ea5e9'; }
+    if(mode==='doctor2'){ text='ドクター2'; dot='#38bdf8'; }
+    modeText.textContent = text;
+    modeDot.style.background = dot;
+    modeBadge.style.borderColor = bd;
+    modeBadge.style.background = bg;
+  }
+
   function startGame(which){
     mode=which;
     currentZoneRatio = CONFIG.NORMAL_ZONE;
     direction = 1; // 毎回リセット
 
+    updateModeBadge();
+
     welcome.style.display='none';
-    playSE('ready'); unlockAndWarmAudio();
+    playSE('ready', 0.7); // さらに控えめにしたい時は 0.3〜0.5 推奨
+    unlockAndWarmAudio();
     if(rafId) cancelAnimationFrame(rafId);
     streak=0;
     showNeedle=false;
@@ -541,6 +616,7 @@ function moveZoneAfterSuccess(currentAngle){
   // ===== 初期化 =====
   setMuted(false);
   updateUnlockVisibility();
+  updateModeBadge(); // 初期表示は「通常」
   requestAnimationFrame(()=>{ resizeCanvas(); });
 })();
 </script>
