@@ -320,19 +320,31 @@
   }
 
   // ③ 次のゾーンは「前ゾーン中心」から180〜270度先
-  function moveZoneAfterSuccess(currentAngle){
-    const ZS=zoneSize();
-    const prevCenter = norm(zoneStart + ZS/2); // 直前ゾーンの中心
-    const offsetDeg = CONFIG.NEXT_MIN_DEG + Math.random()*(CONFIG.NEXT_MAX_DEG - CONFIG.NEXT_MIN_DEG);
-    const nextCenter = norm(prevCenter + (offsetDeg*Math.PI/180));
-    zoneStart = norm(nextCenter - ZS/2);
-    lastInside=false; lastAngle=null;
+// ③ 次のゾーンはモードごとに指定範囲で移動
+function moveZoneAfterSuccess(currentAngle){
+  const ZS = zoneSize();
+  const prevCenter = norm(zoneStart + ZS / 2); // 前ゾーンの中心
 
-    // ドクター/ドクター2：成功ごとに中心をランダム移動
-    if (mode!=='normal') {
-      relocateCenterSafely();
-    }
+  // === モードごとの角度範囲設定 ===
+  let minDeg = 180, maxDeg = 270; // デフォルト: ドクター
+  if (mode === 'normal') { 
+    minDeg = 180; maxDeg = 270; // 通常モードは従来通り（必要なら自由に変えてOK）
+  } else if (mode === 'doctor') {
+    minDeg = 180; maxDeg = 270; // ドクター → 反対側寄り
+  } else if (mode === 'doctor2') {
+    minDeg = 90;  maxDeg = 180; // ドクター2 → やや斜め方向
   }
+
+  // === 次ゾーンの中心角計算 ===
+  const offsetDeg = minDeg + Math.random() * (maxDeg - minDeg);
+  const nextCenter = norm(prevCenter + (offsetDeg * Math.PI / 180));
+  zoneStart = norm(nextCenter - ZS / 2);
+  lastInside = false;
+  lastAngle = null;
+
+  // 中心の移動（ドクター系のみ）
+  if (mode !== 'normal') relocateCenterSafely();
+}
 
   // ===== 入力処理 =====
   function onTap(e){
