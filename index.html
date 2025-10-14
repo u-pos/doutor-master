@@ -200,7 +200,14 @@
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   let actx=null,gMaster=null;
   const buf={success:null,bomb:null,ready:null,fanfare:null};
-  const html={};['success','bomb','ready','fanfare'].forEach(k=>{const a=new Audio(`${k}.mp3`);a.preload='auto';a.playsInline=true;html[k]=a;});
+　const html={};['success','bomb','ready','fanfare'].forEach(k=>{
+  // 「ready」だけ「ready1.mp3」に変更
+  const file = (k === 'ready') ? 'ready1.mp3' : `${k}.mp3`;
+  const a = new Audio(file);
+  a.preload = 'auto';
+  a.playsInline = true;
+  html[k] = a;
+});
   async function unlockAndWarmAudio(){
     try{
       if(!actx){ actx=new AudioCtx({latencyHint:'interactive'}); gMaster=actx.createGain(); gMaster.gain.value=isMuted?0:1; gMaster.connect(actx.destination);}
