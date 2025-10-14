@@ -16,7 +16,6 @@
     padding:8px 6px;margin:0;background:#0b1220;border-bottom:1px solid #1f2b3a}
   header.title h1{margin:0;font-size:clamp(18px,4.3vw,24px);font-weight:900;color:#9bd5ff}
 
-  /* 祝メッセージの最後の行を赤で */
   .overlay .unlock-red{ color:#ff4d4d !important; }
 
   .wrap{min-height:calc(100dvh - 48px);display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px 2px}
@@ -24,7 +23,6 @@
   .board{width:100%;max-width:720px;position:relative}
   #cv{width:100%;height:100%;display:block;background:#0b0e13;border-radius:12px}
 
-  /* ミュート（円の左上固定） */
   #muteBtn{
     position:absolute;top:6px;left:6px;z-index:5;
     width:40px;height:40px;font-size:20px;line-height:1;text-align:center;
@@ -48,7 +46,7 @@
   }
   #tapBtn[disabled]{opacity:.45;cursor:not-allowed}
 
-  .bar, #doctorWrap{
+  .bar, #doctorWrap, #doctor2Wrap{
     width:min(92%,620px);
     display:grid;
     grid-template-columns: 1fr 1fr;
@@ -64,9 +62,13 @@
   }
   #startBtn{background:#10b981;border-color:#065f46;color:#062e26}
 
-  /* ドクターモード（解放後に表示） */
+  /* ドクター */
   #doctorBtn{display:none;background:#0ea5e9;color:#06202b;border-radius:12px;padding:10px 12px}
   #rankDocBtn{display:none}
+
+  /* ドクター2 */
+  #doctor2Btn{display:none;background:#38bdf8;color:#05202b;border-radius:12px;padding:10px 12px}
+  #rankDoc2Btn{display:none}
   
   dialog{border:none;border-radius:12px;padding:0;max-width:520px;width:90vw;background:#0f111a;color:#fff}
   .dlg-head{padding:12px 14px;border-bottom:1px solid #253040;font-weight:700}
@@ -96,6 +98,11 @@
       <button id="doctorBtn" class="btn">ドクターモード</button>
       <button id="rankDocBtn" class="btn">🏆 ドクター</button>
     </div>
+
+    <div id="doctor2Wrap">
+      <button id="doctor2Btn" class="btn">ドクターモード2</button>
+      <button id="rankDoc2Btn" class="btn">🏆 ドクター2</button>
+    </div>
   </div>
 
   <dialog id="rankDlg">
@@ -112,27 +119,30 @@
   const CONFIG = {
     RPM: 60,
     INPUT_CD_MS: 45,
+    // ③ 反対側へ：180〜270度
     NEXT_MIN_DEG: 180,
-    NEXT_MAX_DEG: 220,
+    NEXT_MAX_DEG: 270,
     COUNTDOWN_MS: 1500,
     TARGET_STREAK: 50,
 
-    // 成功ゾーン（角幅の比率）←「前の広さ」に戻す
-    NORMAL_ZONE: 0.10,
+    // ① 成功ゾーンを1.1倍（従来0.10 → 0.11）
+    NORMAL_ZONE: 0.12,
 
-    // ラグ救済（おまけ）1度
+    // ラグ救済
     HIT_EPSILON_DEG: 1,
 
-    // 見た目スケール（円/針/ゾーン太さを0.6倍）※元コード準拠
-    DRAW_SCALE: 0.6
+    // ② 見た目を全体80%に（従来0.60 × 0.80 = 0.48）
+    DRAW_SCALE: 0.60
   };
 
   // ===== 要素 =====
   const $=id=>document.getElementById(id);
   const hdr=$('hdr'), board=$('board'), cv=$('cv'), ctx=cv.getContext('2d',{alpha:false,desynchronized:true});
-  const tapRow=$('tapRow'), btnBar=$('btnBar'), doctorWrap=$('doctorWrap');
-  const tapBtn=$('tapBtn'), startBtn=$('startBtn'), doctorBtn=$('doctorBtn');
-  const rankNormalBtn=$('rankNormalBtn'), rankDocBtn=$('rankDocBtn');
+  const tapRow=$('tapRow'), btnBar=$('btnBar');
+  const tapBtn=$('tapBtn'), startBtn=$('startBtn');
+  const doctorWrap=$('doctorWrap'), doctorBtn=$('doctorBtn'), rankDocBtn=$('rankDocBtn');
+  const doctor2Btn=$('doctor2Btn'), rankDoc2Btn=$('rankDoc2Btn');
+  const rankNormalBtn=$('rankNormalBtn');
   const muteBtn=$('muteBtn'), overlay=$('overlay'), welcome=$('welcome'), welcomeText=$('welcomeText');
   const rankDlg=$('rankDlg'), rankTbody=$('rankTbody'), rankTitle=$('rankTitle'), closeRank=$('closeRank');
 
@@ -145,11 +155,14 @@
   let lastAngle=null, lastInside=false;
   let showNeedle=false;
 
+  // 針の進行方向（+1:通常 / -1:逆）※ドクター2は成功のたびに反転
+  let direction=1;
+
   // レイアウト記録
   let cssW=0, cssH=0, dpr=1;
   let lastRadius=0, lastZoneLineWidth=24*CONFIG.DRAW_SCALE;
 
-  // 中心座標（通常はキャンバス中央、ドクターで成功毎に安全ランダム移動）
+  // 中心座標（通常は中央、ドクター/ドクター2で成功毎に安全ランダム移動）
   let centerX = 0;
   let centerY = 0;
 
@@ -158,7 +171,8 @@
   function fitBoardToViewport(){
     const vh=visualH(), headH=hdr.offsetHeight, tapH=tapRow.offsetHeight, barH=btnBar.offsetHeight;
     const docH=(doctorWrap.offsetHeight||0) * ((doctorBtn.style.display!=='none'||rankDocBtn.style.display!=='none')?1:0);
-    const reserve=headH+tapH+barH+docH+12;
+    const doc2H=(document.getElementById('doctor2Wrap').offsetHeight||0) * ((doctor2Btn.style.display!=='none'||rankDoc2Btn.style.display!=='none')?1:0);
+    const reserve=headH+tapH+barH+docH+doc2H+12;
     const idealSide=Math.min(board.clientWidth||board.getBoundingClientRect().width||320, Math.max(160, vh-reserve));
     board.style.height=idealSide+'px';
   }
@@ -169,10 +183,9 @@
     cssW=rect.width||300; cssH=rect.height||300;
     cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    // リサイズ時はいったん中央へ（次の成功でまた動く）
     centerX = cssW/2; centerY = cssH/2;
     draw(getCurrentAngle(performance.now()));
-    placeWelcomeBetweenCircleAndTap(); // ウェルカムを円とTAPの間へ
+    placeWelcomeBetweenCircleAndTap();
   }
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('orientationchange', resizeCanvas);
@@ -196,7 +209,7 @@
     }catch{}
   }
   function setMuted(m){ isMuted=m; if(gMaster) gMaster.gain.value=m?0:1; Object.values(html).forEach(a=>a.muted=m); muteBtn.textContent=m?'🔇':'🔊'; }
-  function playBuf(key,gain=0.95){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
+  function playBuf(key,gain=0.70){ try{ if(!actx||!buf[key]) return false; const src=actx.createBufferSource(); const g=actx.createGain(); g.gain.value=gain; src.buffer=buf[key]; src.connect(g).connect(gMaster||actx.destination); src.start(); return true;}catch{return false} }
   function playSE(key){ if(isMuted) return; if(playBuf(key)) return; unlockAndWarmAudio(); const tag=html[key]; if(tag){ try{ tag.currentTime=0; tag.play(); }catch{} } }
   window.addEventListener('pointerdown', ()=>{ unlockAndWarmAudio(); }, {once:true});
 
@@ -204,15 +217,15 @@
   const norm=a=>(a%FULL+FULL)%FULL;
   const inRange=(a,s,e)=>(s<=e)?(a>=s&&a<=e):(a>=s||a<=e);
   const cwDelta=(f,t)=>(t-f+FULL)%FULL;
-  const angleAt=t=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + rps*FULL*d); };
+  const angleAt=t=>{ const rps=CONFIG.RPM/60; const d=(t-baseTime)/1000; return norm(baseAngle + direction * rps*FULL*d); };
   const getCurrentAngle=t=>(phase==='play')?angleAt(t):frozenAngle;
 
   function draw(angle){
     const w=cssW,h=cssH,CX=centerX,CY=centerY;
-    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径0.6倍（既存仕様）
+    const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;     // 半径
     const zoneLine = 24*CONFIG.DRAW_SCALE;              // ゾーン太さ
     const needleW  = 6*CONFIG.DRAW_SCALE;               // 針太さ
-    const needleLenRatio = 1.2;                         // 既存描画の針長（外周より少し長い）
+    const needleLenRatio = 1.2;                         // 針長
     const ZS=zoneSize();
 
     lastRadius = r;
@@ -235,7 +248,7 @@
       ctx.lineWidth=needleW; ctx.lineCap='butt'; ctx.strokeStyle='#ef4444'; ctx.stroke();
     }
 
-    // コンボ
+    // コンボ表示
     const combo=String(streak);
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font=`900 ${Math.max(18,Math.round(r*0.32))}px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif`;
@@ -243,7 +256,7 @@
     ctx.fillStyle='#eaeef2'; ctx.fillText(combo,CX,CY-r*0.18); ctx.restore();
   }
 
-  // ===== オーバーレイ／ウェルカムの位置（円とTAPの間） =====
+  // ===== オーバーレイ／ウェルカム位置 =====
   function placeOverlayBelowCircle(ov){
     const margin = 22;
     const dy = (lastRadius + (lastZoneLineWidth/2) + margin);
@@ -271,22 +284,19 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ===== 判定 =====
   function tapTimestamp(e){
     const ts=(e&&typeof e.timeStamp==='number')?e.timeStamp:performance.now();
     return (Math.abs(ts - performance.now()) < 10000) ? ts : performance.now();
   }
 
-  // ===== 安全ランダム中心（ドクターモード用） =====
+  // ===== 安全ランダム中心（ドクター/ドクター2用） =====
   function relocateCenterSafely(){
-    // CSSピクセル座標系（描画はCTXをdprで拡縮しているためCSS基準でOK）
     const w = cssW, h = cssH;
     const r = Math.min(w,h)*0.42*CONFIG.DRAW_SCALE;
     const zoneLine = 24*CONFIG.DRAW_SCALE;
     const needleW  = 6*CONFIG.DRAW_SCALE;
-    const needleLenRatio = 1.2; // 針は外周より少し長い
+    const needleLenRatio = 1.2;
 
-    // はみ出し防止マージン：針先が盤外に出ない最大長＋余白
     const M = (r*needleLenRatio) + Math.max(zoneLine/2, needleW/2) + 2;
 
     const minX = M, maxX = w - M;
@@ -299,31 +309,44 @@
     centerY = Math.round(minY + Math.random()*(maxY - minY));
   }
 
-  // ===== ゲームロジック =====
+  // ===== セットアップ =====
   function setupInitial(){
     const center=Math.random()*FULL, ZS=zoneSize();
     zoneStart = norm(center - ZS/2);
     frozenAngle = norm(center + Math.PI);
     lastInside=false; lastAngle=null;
-
-    // 初期中心はキャンバス中央
     centerX = cssW/2; centerY = cssH/2;
-
     resizeCanvas();
   }
-  function moveZoneAfterSuccess(a){
-    const min=CONFIG.NEXT_MIN_DEG*Math.PI/180, max=CONFIG.NEXT_MAX_DEG*Math.PI/180;
-    const nextCenter=norm(a + (min + Math.random()*(max-min)));
-    const ZS=zoneSize();
-    zoneStart=norm(nextCenter - ZS/2);
-    lastInside=false; lastAngle=null;
 
-    // ★ ドクターモード時：成功のたびに中心を安全ランダム移動
-    if (mode === 'doctor') {
-      relocateCenterSafely();
-    }
+  // ③ 次のゾーンは「前ゾーン中心」から180〜270度先
+// ③ 次のゾーンはモードごとに指定範囲で移動
+function moveZoneAfterSuccess(currentAngle){
+  const ZS = zoneSize();
+  const prevCenter = norm(zoneStart + ZS / 2); // 前ゾーンの中心
+
+  // === モードごとの角度範囲設定 ===
+  let minDeg = 180, maxDeg = 270; // デフォルト: ドクター
+  if (mode === 'normal') { 
+    minDeg = 180; maxDeg = 270; // 通常モードは従来通り（必要なら自由に変えてOK）
+  } else if (mode === 'doctor') {
+    minDeg = 160; maxDeg = 220; // ドクター → 反対側寄り
+  } else if (mode === 'doctor2') {
+    minDeg = 145;  maxDeg = 195; // ドクター2 → やや斜め方向
   }
 
+  // === 次ゾーンの中心角計算 ===
+  const offsetDeg = minDeg + Math.random() * (maxDeg - minDeg);
+  const nextCenter = norm(prevCenter + (offsetDeg * Math.PI / 180));
+  zoneStart = norm(nextCenter - ZS / 2);
+  lastInside = false;
+  lastAngle = null;
+
+  // 中心の移動（ドクター系のみ）
+  if (mode !== 'normal') relocateCenterSafely();
+}
+
+  // ===== 入力処理 =====
   function onTap(e){
     if(phase!=='play') return;
     const now=tapTimestamp(e);
@@ -338,8 +361,13 @@
       playSE('success');
       streak++;
 
-      // ★ 50到達時は継続。お祝いはミス時に出す（既存方針）
-      baseAngle=a; baseTime=now;
+      if (mode==='doctor2') {
+        baseAngle = a; baseTime = now;
+        direction *= -1; // 反転
+      } else {
+        baseAngle = a; baseTime = now;
+      }
+
       moveZoneAfterSuccess(a);
       draw(a);
     }else{
@@ -347,7 +375,6 @@
     }
   }
 
-  // Ready/GO を円とTAPの間に表示
   function showCountdown(){
     overlay.classList.add('show');
     const el = overlay.querySelector('.ovtxt');
@@ -382,8 +409,8 @@
 
   function startGame(which){
     mode=which;
-    // ★ ドクターモードでもゾーン幅は通常と同じ
     currentZoneRatio = CONFIG.NORMAL_ZONE;
+    direction = 1; // 毎回リセット
 
     welcome.style.display='none';
     playSE('ready'); unlockAndWarmAudio();
@@ -395,7 +422,7 @@
     rafId=requestAnimationFrame(loop);
   }
 
-  // ===== ゲームオーバー（ここで祝演出を条件分岐） =====
+  // ===== ゲームオーバー & 解放 =====
   function gameOver(){
     stopGame(true);
     saveScore({score:streak, at:Date.now()});
@@ -404,24 +431,34 @@
     const el = overlay.querySelector('.ovtxt');
 
     if(streak >= CONFIG.TARGET_STREAK && mode==='normal'){
-      // ★ 通常モードで50回以上継続→ミス時に解放告知＆SE
       el.innerHTML =
         '<span style="color:#ffffff">50回達成おめでとう🎉</span><br>' +
         '<span class="unlock-red">ドクターモード解放！</span>';
       overlay.classList.add('show');
       placeOverlayBelowCircle(el);
-
       playSE('fanfare');
       try{ localStorage.setItem('skillcheck_unlock_doctor','1'); }catch{}
       updateUnlockVisibility();
-    }else{
-      // 通常のGAMEOVER（白文字）
-      el.style.color = '#ffffff';
-      el.textContent = 'GAMEOVER';
+      return;
+    }
+
+    if(streak >= CONFIG.TARGET_STREAK && mode==='doctor'){
+      el.innerHTML =
+        '<span style="color:#ffffff">ドクターで50回達成🎉</span><br>' +
+        '<span class="unlock-red">ドクターモード2 解放！</span>';
       overlay.classList.add('show');
       placeOverlayBelowCircle(el);
-      playSE('bomb');
+      playSE('fanfare');
+      try{ localStorage.setItem('skillcheck_unlock_doctor2','1'); }catch{}
+      updateUnlockVisibility();
+      return;
     }
+
+    el.style.color = '#ffffff';
+    el.textContent = 'GAMEOVER';
+    overlay.classList.add('show');
+    placeOverlayBelowCircle(el);
+    playSE('bomb');
   }
 
   function stopGame(keepOverlay){
@@ -438,16 +475,21 @@
   // ===== ランキング =====
   const KEY_NORMAL='rank_normal_v2';
   const KEY_DOC   ='rank_doc_v1';
+  const KEY_DOC2  ='rank_doc2_v1';
   function loadScores(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch{return []} }
   function saveScore(entry){
-    const key=(mode==='doctor')?KEY_DOC:KEY_NORMAL;
+    let key=KEY_NORMAL;
+    if(mode==='doctor') key=KEY_DOC;
+    else if(mode==='doctor2') key=KEY_DOC2;
     if(entry.score<=0) return;
     const arr=loadScores(key); arr.push(entry);
     arr.sort((a,b)=> b.score-a.score || b.at-a.at);
     localStorage.setItem(key, JSON.stringify(arr.slice(0,5)));
   }
   function openRanking(which){
-    const key=(which==='doctor')?KEY_DOC:KEY_NORMAL;
+    let key=KEY_NORMAL, title='🏆 自己ランキングTOP5（通常モード）';
+    if(which==='doctor'){ key=KEY_DOC; title='🏆 自己ランキングTOP5（ドクターモード）'; }
+    if(which==='doctor2'){ key=KEY_DOC2; title='🏆 自己ランキングTOP5（ドクターモード2）'; }
     const arr=loadScores(key);
     rankTbody.innerHTML='';
     arr.forEach((e,i)=>{
@@ -456,28 +498,37 @@
       const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${date}</td><td>${e.score}</td>`;
       rankTbody.appendChild(tr);
     });
-    rankTitle.textContent=(which==='doctor')?'🏆 自己ランキングTOP5（ドクターモード）':'🏆 自己ランキングTOP5（通常モード）';
+    rankTitle.textContent=title;
     rankDlg.showModal();
   }
 
   // ===== ボタン可視制御 =====
-  function isUnlocked(){ try{ return localStorage.getItem('skillcheck_unlock_doctor')==='1'; }catch{ return false; } }
+  function isUnlockedDoctor(){ try{ return localStorage.getItem('skillcheck_unlock_doctor')==='1'; }catch{ return false; } }
+  function isUnlockedDoctor2(){ try{ return localStorage.getItem('skillcheck_unlock_doctor2')==='1'; }catch{ return false; } }
   function updateUnlockVisibility(){
-    const unlocked=isUnlocked();
-    doctorBtn.style.display = unlocked ? 'inline-block' : 'none';
-    rankDocBtn.style.display = unlocked ? 'inline-block' : 'none';
+    const u1=isUnlockedDoctor();
+    const u2=isUnlockedDoctor2();
+
+    doctorBtn.style.display = u1 ? 'inline-block' : 'none';
+    rankDocBtn.style.display = u1 ? 'inline-block' : 'none';
+
+    doctor2Btn.style.display = u2 ? 'inline-block' : 'none';
+    rankDoc2Btn.style.display = u2 ? 'inline-block' : 'none';
+
     requestAnimationFrame(resizeCanvas);
   }
 
   // ===== イベント =====
-  startBtn   .addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
-  doctorBtn  .addEventListener('click', e=>{ e.preventDefault(); startGame('doctor'); }, {passive:false});
-  tapBtn     .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
+  startBtn     .addEventListener('click', e=>{ e.preventDefault(); startGame('normal'); }, {passive:false});
+  doctorBtn    .addEventListener('click', e=>{ e.preventDefault(); startGame('doctor'); }, {passive:false});
+  doctor2Btn   .addEventListener('click', e=>{ e.preventDefault(); startGame('doctor2'); }, {passive:false});
+  tapBtn       .addEventListener('pointerdown', e=>{ e.preventDefault(); onTap(e); }, {passive:false});
   window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); onTap(e); } });
 
-  muteBtn.addEventListener('click', e=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
+  muteBtn      .addEventListener('click', e=>{ e.preventDefault(); setMuted(!isMuted); }, {passive:false});
   rankNormalBtn.addEventListener('click', e=>{ e.preventDefault(); openRanking('normal'); }, {passive:false});
   rankDocBtn   .addEventListener('click', e=>{ e.preventDefault(); openRanking('doctor'); }, {passive:false});
+  rankDoc2Btn  .addEventListener('click', e=>{ e.preventDefault(); openRanking('doctor2'); }, {passive:false});
   closeRank    .addEventListener('click', e=>{ e.preventDefault(); rankDlg.close(); }, {passive:false});
 
   // ===== 初期化 =====
