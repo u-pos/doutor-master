@@ -100,8 +100,8 @@
     </div>
 
     <div id="doctor2Wrap">
-      <button id="doctor2Btn" class="btn">ドクターモード逆</button>
-      <button id="rankDoc2Btn" class="btn">🏆 ドクター逆</button>
+      <button id="doctor2Btn" class="btn">ドクターモード2</button>
+      <button id="rankDoc2Btn" class="btn">🏆 ドクター2</button>
     </div>
   </div>
 
@@ -332,7 +332,7 @@ function moveZoneAfterSuccess(currentAngle){
   } else if (mode === 'doctor') {
     minDeg = 180; maxDeg = 270; // ドクター → 反対側寄り
   } else if (mode === 'doctor2') {
-    minDeg = 120;  maxDeg = 180; // ドクター2 → やや斜め方向
+    minDeg = 100;  maxDeg = 160; // ドクター2 → やや斜め方向
   }
 
   // === 次ゾーンの中心角計算 ===
@@ -445,7 +445,7 @@ function moveZoneAfterSuccess(currentAngle){
     if(streak >= CONFIG.TARGET_STREAK && mode==='doctor'){
       el.innerHTML =
         '<span style="color:#ffffff">ドクターで50回達成🎉</span><br>' +
-        '<span class="unlock-red">ドクターモード逆 解放！</span>';
+        '<span class="unlock-red">ドクターモード2 解放！</span>';
       overlay.classList.add('show');
       placeOverlayBelowCircle(el);
       playSE('fanfare');
@@ -489,7 +489,7 @@ function moveZoneAfterSuccess(currentAngle){
   function openRanking(which){
     let key=KEY_NORMAL, title='🏆 自己ランキングTOP5（通常モード）';
     if(which==='doctor'){ key=KEY_DOC; title='🏆 自己ランキングTOP5（ドクターモード）'; }
-    if(which==='doctor2'){ key=KEY_DOC2; title='🏆 自己ランキングTOP5（ドクターモード逆）'; }
+    if(which==='doctor2'){ key=KEY_DOC2; title='🏆 自己ランキングTOP5（ドクターモード2）'; }
     const arr=loadScores(key);
     rankTbody.innerHTML='';
     arr.forEach((e,i)=>{
